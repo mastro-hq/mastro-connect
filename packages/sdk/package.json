@@ -1,0 +1,13 @@
+{
+  "name": "@mastro/sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Loads validated mastro credentials and replays them against a provider's unofficial API.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@mastro/core": "workspace:*"
+  }
+}

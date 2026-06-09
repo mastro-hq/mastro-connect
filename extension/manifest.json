@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "mastro · connect",
+  "version": "0.1.0",
+  "description": "Captures a browser session for mastro-connect and posts a minimal credential bundle to the local mastro receiver.",
+  "permissions": ["tabs", "cookies", "webRequest", "storage", "scripting"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*", "<all_urls>"],
+  "action": {
+    "default_title": "mastro · connect",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://127.0.0.1/*", "http://localhost/*"],
+      "js": ["content-localhost.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-app.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["page-bridge.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

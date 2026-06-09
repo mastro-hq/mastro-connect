@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+.bun/
+
+# build output
+dist/
+*.tsbuildinfo
+
+# local credentials & captures (NEVER commit)
+.mastro/
+auth/
+*.har
+*.redacted.har.tmp
+
+# editor / os
+.DS_Store
+.vscode/
+.idea/
+*.log
+
+# env
+.env
+.env.local

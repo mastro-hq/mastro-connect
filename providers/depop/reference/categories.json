@@ -1,0 +1,1916 @@
+{
+  "menswear/other-accessories": {
+    "group": "accessories",
+    "legacy_category_id": 68,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/dresses": {
+    "group": "dresses",
+    "legacy_category_id": 11,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "womenswear/fancy-dress": {
+    "group": "fancy-dress",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/joggers-tracksuits": {
+    "group": "bottoms",
+    "legacy_category_id": 229,
+    "size_set_us": 22,
+    "size_set_gb": 20
+  },
+  "womenswear/coats": {
+    "group": "coats-jackets",
+    "legacy_category_id": 13,
+    "size_set_us": 38,
+    "size_set_gb": 36
+  },
+  "everything-else/magazines": {
+    "group": "books-and-magazine",
+    "legacy_category_id": 27,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/blouses": {
+    "group": "tops",
+    "legacy_category_id": 88,
+    "size_set_us": 4,
+    "size_set_gb": 2
+  },
+  "womenswear/other-bottoms": {
+    "group": "bottoms",
+    "legacy_category_id": 117,
+    "size_set_us": 22,
+    "size_set_gb": 20
+  },
+  "everything-else/ball-sports": {
+    "group": "sports-equipment-accesories",
+    "legacy_category_id": 24,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/casual-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/bikini-and-tankini-tops": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/trousers": {
+    "group": "bottoms",
+    "legacy_category_id": 10,
+    "size_set_us": 22,
+    "size_set_gb": 20
+  },
+  "womenswear/hoodies": {
+    "group": "tops",
+    "legacy_category_id": 96,
+    "size_set_us": 4,
+    "size_set_gb": 2
+  },
+  "womenswear/hat": {
+    "group": "accessories",
+    "legacy_category_id": 151,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/jeans": {
+    "group": "bottoms",
+    "legacy_category_id": 35,
+    "size_set_us": 60,
+    "size_set_gb": 58
+  },
+  "kidswear/bodycon-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "menswear/sandals": {
+    "group": "footwear",
+    "legacy_category_id": 55,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "everything-else/laptop-cases-bag": {
+    "group": "tech-accessories",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "everything-else/camping-hiking": {
+    "group": "sports-equipment-accesories",
+    "legacy_category_id": 24,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "everything-else/golf": {
+    "group": "sports-equipment-accesories",
+    "legacy_category_id": 24,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/playsuit-romper": {
+    "group": "jumpsuit-and-playsuit",
+    "legacy_category_id": 113,
+    "size_set_us": 22,
+    "size_set_gb": 20
+  },
+  "everything-else/face-masks": {
+    "group": "face-masks",
+    "legacy_category_id": 200,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/hair-accessories": {
+    "group": "accessories",
+    "legacy_category_id": 194,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/skirts": {
+    "group": "bottoms",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/clogs": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "everything-else/tools-and-brushes": {
+    "group": "beauty",
+    "legacy_category_id": 23,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/leggings": {
+    "group": "bottoms",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/shirt-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/dungarees-overalls": {
+    "group": "jumpsuit-and-playsuit",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "everything-else/stickers": {
+    "group": "art",
+    "legacy_category_id": 18,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/corsets": {
+    "group": "tops",
+    "legacy_category_id": 207,
+    "size_set_us": 4,
+    "size_set_gb": 2
+  },
+  "womenswear/espadrilles": {
+    "group": "footwear",
+    "legacy_category_id": 14,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "kidswear/flipflops": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "kidswear/hoodies": {
+    "group": "tops",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "womenswear/socks": {
+    "group": "underwear",
+    "legacy_category_id": 153,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/belt": {
+    "group": "accessories",
+    "legacy_category_id": 149,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/bras": {
+    "group": "underwear",
+    "legacy_category_id": 158,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "menswear/slides": {
+    "group": "footwear",
+    "legacy_category_id": 55,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "menswear/other-tops": {
+    "group": "tops",
+    "legacy_category_id": 52,
+    "size_set_us": 54,
+    "size_set_gb": 52
+  },
+  "menswear/jewellery": {
+    "group": "accessories",
+    "legacy_category_id": 17,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/mules": {
+    "group": "footwear",
+    "legacy_category_id": 6,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "menswear/ballet-shoes": {
+    "group": "footwear",
+    "legacy_category_id": 6,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "menswear/bikini-and-tankini-tops": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 85,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "kidswear/trainers": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "everything-else/photography": {
+    "group": "art",
+    "legacy_category_id": 18,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/shorts": {
+    "group": "bottoms",
+    "legacy_category_id": 101,
+    "size_set_us": 22,
+    "size_set_gb": 20
+  },
+  "womenswear/skirts": {
+    "group": "bottoms",
+    "legacy_category_id": 100,
+    "size_set_us": 22,
+    "size_set_gb": 20
+  },
+  "womenswear/flipflops": {
+    "group": "footwear",
+    "legacy_category_id": 14,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "kidswear/brogues": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "everything-else/makeup": {
+    "group": "beauty",
+    "legacy_category_id": 23,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/bundles": {
+    "group": "bundles",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/shorts": {
+    "group": "bottoms",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "everything-else/cars-vehicles": {
+    "group": "toys",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/babydoll-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/other-jumpsuit-and-playsuit": {
+    "group": "jumpsuit-and-playsuit",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "everything-else/grooming": {
+    "group": "beauty",
+    "legacy_category_id": 23,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/trainers": {
+    "group": "footwear",
+    "legacy_category_id": 54,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "everything-else/mixed-media": {
+    "group": "art",
+    "legacy_category_id": 18,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/clogs": {
+    "group": "footwear",
+    "legacy_category_id": 14,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "menswear/courts": {
+    "group": "footwear",
+    "legacy_category_id": 6,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "menswear/flipflops": {
+    "group": "footwear",
+    "legacy_category_id": 55,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "menswear/other-nightwear": {
+    "group": "nightwear",
+    "legacy_category_id": 86,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "everything-else/trading-cards": {
+    "group": "toys",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/other-swim-beach-wear": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 85,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "womenswear/jumpsuit": {
+    "group": "jumpsuit-and-playsuit",
+    "legacy_category_id": 113,
+    "size_set_us": 22,
+    "size_set_gb": 20
+  },
+  "womenswear/scarf-wraps": {
+    "group": "accessories",
+    "legacy_category_id": 147,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/loafers": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "kidswear/jumpsuit": {
+    "group": "jumpsuit-and-playsuit",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "menswear/hoodies": {
+    "group": "tops",
+    "legacy_category_id": 47,
+    "size_set_us": 54,
+    "size_set_gb": 52
+  },
+  "womenswear/hosiery-tights": {
+    "group": "underwear",
+    "legacy_category_id": 153,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "everything-else/books": {
+    "group": "books-and-magazine",
+    "legacy_category_id": 27,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/pajamas": {
+    "group": "nightwear",
+    "legacy_category_id": 86,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "womenswear/sandals": {
+    "group": "footwear",
+    "legacy_category_id": 164,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "womenswear/brogues": {
+    "group": "footwear",
+    "legacy_category_id": 225,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "everything-else/skincare": {
+    "group": "beauty",
+    "legacy_category_id": 23,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/dungarees-overalls": {
+    "group": "jumpsuit-and-playsuit",
+    "legacy_category_id": 210,
+    "size_set_us": 22,
+    "size_set_gb": 20
+  },
+  "everything-else/dinnerware": {
+    "group": "home",
+    "legacy_category_id": 21,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/cardigans": {
+    "group": "tops",
+    "legacy_category_id": 45,
+    "size_set_us": 54,
+    "size_set_gb": 52
+  },
+  "womenswear/other-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 11,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "kidswear/slippers": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "kidswear/other-bottoms": {
+    "group": "bottoms",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "menswear/shapewear": {
+    "group": "underwear",
+    "legacy_category_id": 4,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "menswear/fancy-dress": {
+    "group": "fancy-dress",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/espadrilles": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "kidswear/shirts": {
+    "group": "tops",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "menswear/bodysuits": {
+    "group": "tops",
+    "legacy_category_id": 2,
+    "size_set_us": 54,
+    "size_set_gb": 52
+  },
+  "womenswear/shapewear": {
+    "group": "underwear",
+    "legacy_category_id": 157,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "everything-else/raquet-sports": {
+    "group": "sports-equipment-accesories",
+    "legacy_category_id": 24,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/slippers": {
+    "group": "footwear",
+    "legacy_category_id": 14,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "womenswear/vest-undershirts": {
+    "group": "underwear",
+    "legacy_category_id": 160,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "kidswear/scarf-wraps": {
+    "group": "accessories",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/tuxedos": {
+    "group": "suits",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "everything-else/collectibles": {
+    "group": "art",
+    "legacy_category_id": 18,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/bodysuits": {
+    "group": "tops",
+    "legacy_category_id": 98,
+    "size_set_us": 4,
+    "size_set_gb": 2
+  },
+  "kidswear/gloves": {
+    "group": "accessories",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/boat-shoes": {
+    "group": "footwear",
+    "legacy_category_id": 6,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "kidswear/jewellery": {
+    "group": "accessories",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/dresses": {
+    "group": "dresses",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/gilets": {
+    "group": "coats-jackets",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/hat": {
+    "group": "accessories",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "everything-else/decorations": {
+    "group": "party-supplies",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/shirts": {
+    "group": "tops",
+    "legacy_category_id": 2,
+    "size_set_us": 54,
+    "size_set_gb": 52
+  },
+  "kidswear/blouses": {
+    "group": "tops",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "womenswear/going-out-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 11,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "kidswear/waistcoats-vests": {
+    "group": "suits",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/belt": {
+    "group": "accessories",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/fancy-dress": {
+    "group": "fancy-dress",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/loafers": {
+    "group": "footwear",
+    "legacy_category_id": 6,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "kidswear/other-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "menswear/tailored-jackets": {
+    "group": "suits",
+    "legacy_category_id": 81,
+    "size_set_us": 95,
+    "size_set_gb": 93
+  },
+  "womenswear/shift-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 11,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "kidswear/watch": {
+    "group": "accessories",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/corsets": {
+    "group": "tops",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "womenswear/other-suits": {
+    "group": "suits",
+    "legacy_category_id": 129,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "womenswear/gilets": {
+    "group": "coats-jackets",
+    "legacy_category_id": 142,
+    "size_set_us": 38,
+    "size_set_gb": 36
+  },
+  "menswear/bandeaus": {
+    "group": "underwear",
+    "legacy_category_id": 4,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "kidswear/ballet-shoes": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "kidswear/other-footwear": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "menswear/bikinis-and-tankini-sets": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 85,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "womenswear/babydoll-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 11,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "womenswear/bikini-and-tankini-bottoms": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 156,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "kidswear/other-suits": {
+    "group": "suits",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/wallet-purses": {
+    "group": "accessories",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/sweatshirts": {
+    "group": "tops",
+    "legacy_category_id": 93,
+    "size_set_us": 4,
+    "size_set_gb": 2
+  },
+  "kidswear/pajamas": {
+    "group": "nightwear",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "everything-else/nails": {
+    "group": "beauty",
+    "legacy_category_id": 23,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/prom-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "womenswear/cover-ups": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 156,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "menswear/hosiery-tights": {
+    "group": "underwear",
+    "legacy_category_id": 4,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "everything-else/hair-products": {
+    "group": "beauty",
+    "legacy_category_id": 23,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/bag": {
+    "group": "accessories",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/sweatshirts": {
+    "group": "tops",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "everything-else/stuffed-animals": {
+    "group": "toys",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/slides": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "kidswear/mules": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "menswear/bras": {
+    "group": "underwear",
+    "legacy_category_id": 4,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "everything-else/water-sports": {
+    "group": "sports-equipment-accesories",
+    "legacy_category_id": 24,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/waistcoats-vests": {
+    "group": "suits",
+    "legacy_category_id": 9,
+    "size_set_us": 4,
+    "size_set_gb": 2
+  },
+  "womenswear/prom-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 11,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "kidswear/jackets": {
+    "group": "coats-jackets",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "womenswear/bikinis-and-tankini-sets": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 156,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "womenswear/courts": {
+    "group": "footwear",
+    "legacy_category_id": 14,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "womenswear/bag": {
+    "group": "accessories",
+    "legacy_category_id": 146,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/crop-top": {
+    "group": "tops",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "womenswear/work-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 11,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "everything-else/cycling": {
+    "group": "sports-equipment-accesories",
+    "legacy_category_id": 24,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/shirts": {
+    "group": "tops",
+    "legacy_category_id": 208,
+    "size_set_us": 4,
+    "size_set_gb": 2
+  },
+  "womenswear/other-tops": {
+    "group": "tops",
+    "legacy_category_id": 99,
+    "size_set_us": 4,
+    "size_set_gb": 2
+  },
+  "kidswear/work-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "menswear/suits": {
+    "group": "suits",
+    "legacy_category_id": 81,
+    "size_set_us": 95,
+    "size_set_gb": 93
+  },
+  "menswear/oxfords": {
+    "group": "footwear",
+    "legacy_category_id": 6,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "everything-else/sculptures": {
+    "group": "art",
+    "legacy_category_id": 18,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/jackets": {
+    "group": "coats-jackets",
+    "legacy_category_id": 13,
+    "size_set_us": 38,
+    "size_set_gb": 36
+  },
+  "womenswear/tuxedos": {
+    "group": "suits",
+    "legacy_category_id": 129,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "kidswear/sunglasses": {
+    "group": "accessories",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/cardigans": {
+    "group": "tops",
+    "legacy_category_id": 95,
+    "size_set_us": 4,
+    "size_set_gb": 2
+  },
+  "kidswear/joggers-tracksuits": {
+    "group": "bottoms",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "everything-else/party-hats": {
+    "group": "party-supplies",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/corsets": {
+    "group": "tops",
+    "legacy_category_id": 2,
+    "size_set_us": 54,
+    "size_set_gb": 52
+  },
+  "kidswear/courts": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "womenswear/tshirts": {
+    "group": "tops",
+    "legacy_category_id": 87,
+    "size_set_us": 4,
+    "size_set_gb": 2
+  },
+  "menswear/scarf-wraps": {
+    "group": "accessories",
+    "legacy_category_id": 64,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/bodysuits": {
+    "group": "tops",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "womenswear/pajamas": {
+    "group": "nightwear",
+    "legacy_category_id": 161,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "menswear/tailored-trousers": {
+    "group": "suits",
+    "legacy_category_id": 81,
+    "size_set_us": 95,
+    "size_set_gb": 93
+  },
+  "kidswear/hair-accessories": {
+    "group": "accessories",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "everything-else/fitness": {
+    "group": "sports-equipment-accesories",
+    "legacy_category_id": 24,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/waistcoats-vests": {
+    "group": "suits",
+    "legacy_category_id": 81,
+    "size_set_us": 95,
+    "size_set_gb": 93
+  },
+  "everything-else/fragrance": {
+    "group": "beauty",
+    "legacy_category_id": 23,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "everything-else/puzzles-games": {
+    "group": "toys",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/shorts": {
+    "group": "bottoms",
+    "legacy_category_id": 41,
+    "size_set_us": 60,
+    "size_set_gb": 58
+  },
+  "kidswear/jumpers": {
+    "group": "tops",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/other-tops": {
+    "group": "tops",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/other-coats-jackets": {
+    "group": "coats-jackets",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "menswear/blouses": {
+    "group": "tops",
+    "legacy_category_id": 2,
+    "size_set_us": 54,
+    "size_set_gb": 52
+  },
+  "menswear/panties": {
+    "group": "underwear",
+    "legacy_category_id": 4,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "kidswear/boat-shoes": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "womenswear/jewellery": {
+    "group": "accessories",
+    "legacy_category_id": 17,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/vests-tanks-camis": {
+    "group": "tops",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "womenswear/boat-shoes": {
+    "group": "footwear",
+    "legacy_category_id": 14,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "menswear/gilets": {
+    "group": "coats-jackets",
+    "legacy_category_id": 80,
+    "size_set_us": 95,
+    "size_set_gb": 93
+  },
+  "kidswear/jeans": {
+    "group": "bottoms",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "womenswear/suits": {
+    "group": "suits",
+    "legacy_category_id": 129,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "kidswear/swim-briefs-shorts": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/hair-accessories": {
+    "group": "accessories",
+    "legacy_category_id": 194,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/coats": {
+    "group": "coats-jackets",
+    "legacy_category_id": 5,
+    "size_set_us": 95,
+    "size_set_gb": 93
+  },
+  "everything-else/musical-instruments-and-dj": {
+    "group": "music",
+    "legacy_category_id": 29,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/dungarees-overalls": {
+    "group": "jumpsuit-and-playsuit",
+    "legacy_category_id": 3,
+    "size_set_us": 60,
+    "size_set_gb": 58
+  },
+  "womenswear/jeans": {
+    "group": "bottoms",
+    "legacy_category_id": 10,
+    "size_set_us": 22,
+    "size_set_gb": 20
+  },
+  "everything-else/skates-skateboards-scooters": {
+    "group": "sports-equipment-accesories",
+    "legacy_category_id": 24,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/tuxedos": {
+    "group": "suits",
+    "legacy_category_id": 81,
+    "size_set_us": 95,
+    "size_set_gb": 93
+  },
+  "menswear/swimsuit-one-piece": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 85,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "kidswear/cover-ups": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/other-suits": {
+    "group": "suits",
+    "legacy_category_id": 81,
+    "size_set_us": 95,
+    "size_set_gb": 93
+  },
+  "kidswear/formal-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "everything-else/umbrella": {
+    "group": "umbrella",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "everything-else/learning-toys": {
+    "group": "toys",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/boots": {
+    "group": "footwear",
+    "legacy_category_id": 216,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "womenswear/robes": {
+    "group": "nightwear",
+    "legacy_category_id": 162,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "womenswear/crop-top": {
+    "group": "tops",
+    "legacy_category_id": 91,
+    "size_set_us": 4,
+    "size_set_gb": 2
+  },
+  "kidswear/other-swim-beach-wear": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/cover-ups": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 85,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "womenswear/gloves": {
+    "group": "accessories",
+    "legacy_category_id": 212,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "everything-else/favours": {
+    "group": "party-supplies",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/socks": {
+    "group": "underwear",
+    "legacy_category_id": 67,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/hat": {
+    "group": "accessories",
+    "legacy_category_id": 61,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/robes": {
+    "group": "nightwear",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/bikini-and-tankini-bottoms": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 85,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "everything-else/storage-and-organisation": {
+    "group": "home",
+    "legacy_category_id": 21,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/gloves": {
+    "group": "accessories",
+    "legacy_category_id": 63,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/other-bottoms": {
+    "group": "bottoms",
+    "legacy_category_id": 42,
+    "size_set_us": 60,
+    "size_set_gb": 58
+  },
+  "womenswear/wallet-purses": {
+    "group": "accessories",
+    "legacy_category_id": 148,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/shift-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "womenswear/panties": {
+    "group": "underwear",
+    "legacy_category_id": 157,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "menswear/swim-briefs-shorts": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 85,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "kidswear/trousers": {
+    "group": "bottoms",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "everything-else/cards-invitations-gift-wrap": {
+    "group": "party-supplies",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/playsuit-romper": {
+    "group": "jumpsuit-and-playsuit",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/wedding-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/coats": {
+    "group": "coats-jackets",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/bikini-and-tankini-bottoms": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/sweatshirts": {
+    "group": "tops",
+    "legacy_category_id": 46,
+    "size_set_us": 54,
+    "size_set_gb": 52
+  },
+  "womenswear/polo-shirts": {
+    "group": "tops",
+    "legacy_category_id": 9,
+    "size_set_us": 4,
+    "size_set_gb": 2
+  },
+  "menswear/other-jumpsuit-and-playsuit": {
+    "group": "jumpsuit-and-playsuit",
+    "legacy_category_id": 42,
+    "size_set_us": 60,
+    "size_set_gb": 58
+  },
+  "menswear/trousers": {
+    "group": "bottoms",
+    "legacy_category_id": 3,
+    "size_set_us": 60,
+    "size_set_gb": 58
+  },
+  "menswear/joggers-tracksuits": {
+    "group": "bottoms",
+    "legacy_category_id": 36,
+    "size_set_us": 60,
+    "size_set_gb": 58
+  },
+  "menswear/jumpers": {
+    "group": "tops",
+    "legacy_category_id": 44,
+    "size_set_us": 54,
+    "size_set_gb": 52
+  },
+  "womenswear/vests-tanks-camis": {
+    "group": "tops",
+    "legacy_category_id": 97,
+    "size_set_us": 4,
+    "size_set_gb": 2
+  },
+  "menswear/slippers": {
+    "group": "footwear",
+    "legacy_category_id": 6,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "kidswear/polo-shirts": {
+    "group": "tops",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "everything-else/bath-and-body": {
+    "group": "beauty",
+    "legacy_category_id": 23,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/wedding-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 11,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "womenswear/formal-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 11,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "womenswear/tailored-trousers": {
+    "group": "suits",
+    "legacy_category_id": 10,
+    "size_set_us": 22,
+    "size_set_gb": 20
+  },
+  "menswear/other-underwear": {
+    "group": "underwear",
+    "legacy_category_id": 86,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "kidswear/tailored-jackets": {
+    "group": "suits",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "menswear/robes": {
+    "group": "nightwear",
+    "legacy_category_id": 86,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "menswear/sunglasses": {
+    "group": "accessories",
+    "legacy_category_id": 65,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/other-accessories": {
+    "group": "accessories",
+    "legacy_category_id": 155,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/vest-undershirts": {
+    "group": "underwear",
+    "legacy_category_id": 4,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "menswear/brogues": {
+    "group": "footwear",
+    "legacy_category_id": 217,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "womenswear/other-footwear": {
+    "group": "footwear",
+    "legacy_category_id": 174,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "everything-else/cake-decor": {
+    "group": "party-supplies",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "everything-else/drawing-and-illustrations": {
+    "group": "art",
+    "legacy_category_id": 18,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/boots": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "womenswear/boots": {
+    "group": "footwear",
+    "legacy_category_id": 166,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "menswear/other-coats-jackets": {
+    "group": "coats-jackets",
+    "legacy_category_id": 82,
+    "size_set_us": 95,
+    "size_set_gb": 93
+  },
+  "kidswear/tshirts": {
+    "group": "tops",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "menswear/first-shoes-baby-shoes": {
+    "group": "footwear",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/swim-briefs-shorts": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 156,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "everything-else/building-sets-blocks": {
+    "group": "toys",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/going-out-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "kidswear/other-nightwear": {
+    "group": "nightwear",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/other-nightwear": {
+    "group": "nightwear",
+    "legacy_category_id": 161,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "kidswear/oxfords": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "womenswear/casual-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 11,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "kidswear/sleepsuits-babygrows": {
+    "group": "sleepsuits-and-bodysuits",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "womenswear/bodycon-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 11,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "menswear/espadrilles": {
+    "group": "footwear",
+    "legacy_category_id": 6,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "menswear/crop-top": {
+    "group": "tops",
+    "legacy_category_id": 2,
+    "size_set_us": 54,
+    "size_set_gb": 52
+  },
+  "everything-else/decor-home-accesories": {
+    "group": "home",
+    "legacy_category_id": 21,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/swimsuit-one-piece": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/sandals": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "everything-else/cds-and-vinyl": {
+    "group": "music",
+    "legacy_category_id": 29,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/summer-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "womenswear/other-swim-beach-wear": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 156,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "everything-else/dolls-accessories": {
+    "group": "toys",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/bikinis-and-tankini-sets": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/jumpers": {
+    "group": "tops",
+    "legacy_category_id": 94,
+    "size_set_us": 4,
+    "size_set_gb": 2
+  },
+  "menswear/jackets": {
+    "group": "coats-jackets",
+    "legacy_category_id": 5,
+    "size_set_us": 95,
+    "size_set_gb": 93
+  },
+  "womenswear/other-jumpsuit-and-playsuit": {
+    "group": "jumpsuit-and-playsuit",
+    "legacy_category_id": 113,
+    "size_set_us": 22,
+    "size_set_gb": 20
+  },
+  "womenswear/bikini-and-tankini-tops": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 156,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "womenswear/mules": {
+    "group": "footwear",
+    "legacy_category_id": 14,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "menswear/belt": {
+    "group": "accessories",
+    "legacy_category_id": 60,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/jumpsuit": {
+    "group": "jumpsuit-and-playsuit",
+    "legacy_category_id": 3,
+    "size_set_us": 60,
+    "size_set_gb": 58
+  },
+  "menswear/bag": {
+    "group": "accessories",
+    "legacy_category_id": 59,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/wrap-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "everything-else/cameras-and-accessories": {
+    "group": "film",
+    "legacy_category_id": 228,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/swimsuit-one-piece": {
+    "group": "swim-beach-wear",
+    "legacy_category_id": 156,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "womenswear/wrap-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 11,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "kidswear/suits": {
+    "group": "suits",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "everything-else/soft-furnishings-textiles": {
+    "group": "home",
+    "legacy_category_id": 21,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/wallet-purses": {
+    "group": "accessories",
+    "legacy_category_id": 68,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/watch": {
+    "group": "accessories",
+    "legacy_category_id": 154,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/ballet-shoes": {
+    "group": "footwear",
+    "legacy_category_id": 14,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "menswear/leggings": {
+    "group": "bottoms",
+    "legacy_category_id": 3,
+    "size_set_us": 60,
+    "size_set_gb": 58
+  },
+  "menswear/playsuit-romper": {
+    "group": "jumpsuit-and-playsuit",
+    "legacy_category_id": 3,
+    "size_set_us": 60,
+    "size_set_gb": 58
+  },
+  "kidswear/first-shoes-baby-shoes": {
+    "group": "footwear",
+    "legacy_category_id": 231,
+    "size_set_us": 103,
+    "size_set_gb": 102
+  },
+  "kidswear/tailored-trousers": {
+    "group": "suits",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "everything-else/furniture": {
+    "group": "home",
+    "legacy_category_id": 21,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/summer-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 11,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "menswear/skirts": {
+    "group": "bottoms",
+    "legacy_category_id": 3,
+    "size_set_us": 60,
+    "size_set_gb": 58
+  },
+  "everything-else/prints": {
+    "group": "art",
+    "legacy_category_id": 18,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/trainers": {
+    "group": "footwear",
+    "legacy_category_id": 171,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "everything-else/paintings": {
+    "group": "art",
+    "legacy_category_id": 18,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/loafers": {
+    "group": "footwear",
+    "legacy_category_id": 165,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "womenswear/other-coats-jackets": {
+    "group": "coats-jackets",
+    "legacy_category_id": 145,
+    "size_set_us": 38,
+    "size_set_gb": 36
+  },
+  "womenswear/first-shoes-baby-shoes": {
+    "group": "footwear",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/boxers-and-briefs": {
+    "group": "underwear",
+    "legacy_category_id": 83,
+    "size_set_us": 89,
+    "size_set_gb": 87
+  },
+  "womenswear/slides": {
+    "group": "footwear",
+    "legacy_category_id": 170,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "womenswear/bandeaus": {
+    "group": "underwear",
+    "legacy_category_id": 157,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "womenswear/other-underwear": {
+    "group": "underwear",
+    "legacy_category_id": 163,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "menswear/other-footwear": {
+    "group": "footwear",
+    "legacy_category_id": 58,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "menswear/tshirts": {
+    "group": "tops",
+    "legacy_category_id": 43,
+    "size_set_us": 54,
+    "size_set_gb": 52
+  },
+  "menswear/polo-shirts": {
+    "group": "tops",
+    "legacy_category_id": 49,
+    "size_set_us": 54,
+    "size_set_gb": 52
+  },
+  "womenswear/tailored-jackets": {
+    "group": "suits",
+    "legacy_category_id": 138,
+    "size_set_us": 38,
+    "size_set_gb": 36
+  },
+  "womenswear/leggings": {
+    "group": "bottoms",
+    "legacy_category_id": 107,
+    "size_set_us": 22,
+    "size_set_gb": 20
+  },
+  "menswear/vests-tanks-camis": {
+    "group": "tops",
+    "legacy_category_id": 48,
+    "size_set_us": 54,
+    "size_set_gb": 52
+  },
+  "womenswear/sunglasses": {
+    "group": "accessories",
+    "legacy_category_id": 150,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "everything-else/action-figures-playsets": {
+    "group": "toys",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "womenswear/oxfords": {
+    "group": "footwear",
+    "legacy_category_id": 14,
+    "size_set_us": 46,
+    "size_set_gb": 44
+  },
+  "menswear/clogs": {
+    "group": "footwear",
+    "legacy_category_id": 6,
+    "size_set_us": 77,
+    "size_set_gb": 5
+  },
+  "kidswear/other-accessories": {
+    "group": "accessories",
+    "legacy_category_id": 22,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "kidswear/cardigans": {
+    "group": "tops",
+    "legacy_category_id": 230,
+    "size_set_us": 100,
+    "size_set_gb": 99
+  },
+  "womenswear/shirt-dresses": {
+    "group": "dresses",
+    "legacy_category_id": 11,
+    "size_set_us": 84,
+    "size_set_gb": 86
+  },
+  "womenswear/boxers-and-briefs": {
+    "group": "underwear",
+    "legacy_category_id": 157,
+    "size_set_us": 30,
+    "size_set_gb": 28
+  },
+  "everything-else/winter-sports": {
+    "group": "sports-equipment-accesories",
+    "legacy_category_id": 24,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "everything-else/phone-cases": {
+    "group": "tech-accessories",
+    "legacy_category_id": 26,
+    "size_set_us": null,
+    "size_set_gb": null
+  },
+  "menswear/watch": {
+    "group": "accessories",
+    "legacy_category_id": 66,
+    "size_set_us": null,
+    "size_set_gb": null
+  }
+}
