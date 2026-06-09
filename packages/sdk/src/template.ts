@@ -11,6 +11,8 @@ export type TemplateContext = Record<string, unknown>;
 
 const WHOLE = /^\$\{([^}]+)\}$/;
 const PART = /\$\{([^}]+)\}/g;
+/** An innermost placeholder: `${...}` whose body has no nested `${`. */
+const INNER = /\$\{([^${}]+)\}/;
 
 export class MissingTemplateValue extends Error {
   constructor(public readonly expr: string) {
@@ -25,10 +27,25 @@ export function renderTemplate(
   ctx: TemplateContext,
   { strict = true }: { strict?: boolean } = {},
 ): unknown {
+  template = resolveNested(template, ctx, strict);
+
   const whole = template.match(WHOLE);
   if (whole) {
-    const value = lookup(whole[1]!.trim(), ctx);
-    if (value === undefined && strict) throw new MissingTemplateValue(whole[1]!.trim());
+    let expr = whole[1]!.trim();
+    // `${num:expr}` casts the resolved value to a JS number, so a body field
+    // serializes as a JSON number rather than a string (Depop wants numeric
+    // lat/lng, address id, variant_set). A non-numeric value is left as-is.
+    let cast: "number" | undefined;
+    if (expr.startsWith("num:")) {
+      cast = "number";
+      expr = expr.slice(4).trim();
+    }
+    const value = lookup(expr, ctx);
+    if (value === undefined && strict) throw new MissingTemplateValue(expr);
+    if (cast === "number" && value != null && value !== "") {
+      const n = Number(value);
+      if (!Number.isNaN(n)) return n;
+    }
     return value;
   }
   return template.replace(PART, (_, expr: string) => {
@@ -43,8 +60,14 @@ export function renderDeep(value: unknown, ctx: TemplateContext, opts?: { strict
   if (typeof value === "string") return renderTemplate(value, ctx, opts);
   if (Array.isArray(value)) return value.map((v) => renderDeep(v, ctx, opts));
   if (value && typeof value === "object") {
+    // Render both keys and values so a body can have a dynamic key, e.g.
+    // `{ "${args.variant}": 1 }` → `{ "4": 1 }` (Depop's `variants` map). An
+    // entry whose key renders empty (e.g. a one-size item with no variant) is
+    // dropped, so `{ "${args.variant}": 1 }` becomes `{}` rather than `{ "": 1 }`.
     return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [k, renderDeep(v, ctx, opts)]),
+      Object.entries(value)
+        .map(([k, v]) => [renderTemplateString(k, ctx, opts), renderDeep(v, ctx, opts)] as const)
+        .filter(([k]) => k !== ""),
     );
   }
   return value;
@@ -78,6 +101,28 @@ export function renderStringMap(
   return out;
 }
 
+/**
+ * Resolve nested placeholders inside-out, e.g. `${steps.slots.${index}}` with
+ * index=0 → `${steps.slots.0}`. Repeatedly substitutes the innermost
+ * placeholder (one with no `${` in its body) until only top-level placeholders
+ * remain, which the caller then resolves normally. A string with no nesting is
+ * returned unchanged after one cheap scan.
+ */
+function resolveNested(template: string, ctx: TemplateContext, strict: boolean): string {
+  // Only the body of an *outer* placeholder can contain a nested `${`. If no
+  // placeholder body contains `${`, there's nothing to pre-resolve.
+  while (/\$\{[^}]*\$\{/.test(template)) {
+    const before = template;
+    template = template.replace(INNER, (_, expr: string) => {
+      const value = lookup(expr.trim(), ctx);
+      if (value === undefined && strict) throw new MissingTemplateValue(expr.trim());
+      return value == null ? "" : String(value);
+    });
+    if (template === before) break; // no progress — avoid an infinite loop
+  }
+  return template;
+}
+
 function lookup(expr: string, ctx: TemplateContext): unknown {
   // `${path|fallback}` — use the literal fallback when the path is empty/missing.
   const pipe = expr.indexOf("|");
@@ -92,6 +137,12 @@ function lookup(expr: string, ctx: TemplateContext): unknown {
   // A leaf that resolves to a zero-arg function is a generator (e.g. `${uuid}`,
   // `${now}`) — call it so each use produces a fresh value.
   const resolved = typeof value === "function" ? (value as () => unknown)() : value;
-  if ((resolved === undefined || resolved === "") && fallback !== undefined) return fallback;
+  if ((resolved === undefined || resolved === "") && fallback !== undefined) {
+    // `[]` / `{}` fallbacks yield real empty JSON containers (so an omitted
+    // repeatable flag like --age becomes `[]`, not the literal string "[]").
+    if (fallback === "[]") return [];
+    if (fallback === "{}") return {};
+    return fallback;
+  }
   return resolved;
 }

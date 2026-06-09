@@ -103,12 +103,20 @@ export interface MastroWorkflow {
  */
 export interface WorkflowStep {
   id: string;
-  operationId: string;
+  /**
+   * The operation to call. Omit for a *pure transform* step: no HTTP call is
+   * made; the step's `value` (templated, defaults to the foreach `${item}`) is
+   * shaped through `output` (path/extract/coerce). Used to derive data from a
+   * prior step — e.g. numeric picture ids from slot URLs — without a round-trip.
+   */
+  operationId?: string;
   description?: string;
   /** Run this step once per item of a template list, e.g. "${args.photo}". */
   foreach?: string;
   /** Inside a foreach, the current item is bound to this name in `${item}`. */
   as?: string;
+  /** A transform step's input expression (templated). Defaults to `${item}`. */
+  value?: string;
   /** Per-step request shaping (templated). */
   request?: WorkflowRequest;
   /** Poll config — repeat the request until `until` resolves truthy. */
@@ -149,6 +157,13 @@ export interface WorkflowOutput {
    * first group is kept. Used to pull a picture id out of an S3 URL.
    */
   extract?: string;
+  /**
+   * Optional type coercion for the extracted/selected value. `number` parses a
+   * numeric string into a JS number — needed when a later step's body must send
+   * the value as a JSON number (e.g. Depop's validate wants integer picture ids,
+   * not strings).
+   */
+  coerce?: "number";
 }
 
 export interface WorkflowArg {

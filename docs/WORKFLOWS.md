@@ -3,7 +3,8 @@
 OpenAPI describes single request/response operations. Some connector commands
 are *stateful sequences* — e.g. Depop's "list an item": upload each photo, PUT
 the bytes to a presigned URL, poll until processed, then create the listing,
-with picture ids from step 1 feeding the final body.
+with the numeric picture ids (derived from the upload slots) feeding the final
+body.
 
 `x-mastro-workflow` models that declaratively, in the OpenAPI doc. The command's
 own path/method isn't called; its **steps** are.
@@ -25,24 +26,27 @@ own path/method isn't called; its **steps** are.
             value_path: size_set_us
             key_template: "${args.department}/${args.type}" }
     x-mastro-workflow:
-      result: createListing     # which step's result to return
+      result: createListing     # which step's response the command returns
       steps:
         - id: slots
           operationId: uploadPicture
           foreach: "${args.photo}"      # run once per photo
-          as: photo
-          output: { path: url }         # keep response.url as this step's result
+          output: { path: url }         # keep response.url (the presigned slot)
         - id: uploads
           operationId: s3Put
-          foreach: "${steps.slots}"
+          foreach: "${args.photo}"      # iterate photos so ${item} is the file…
           request:
-            url: "${item}"              # presigned URL from the prior step
-            no_auth: true              # presigned → no bearer/cookies
-            body: "${file:args.photo}" # binary file body
+            url: "${steps.slots.${index}}"  # …paired with its slot by index
+            no_auth: true                   # presigned → no bearer/cookies
+            body: "${file:item}"            # binary file body (this photo)
+        - id: pictureIds                 # transform: slot URL → numeric id
+          foreach: "${steps.slots}"
+          value: "${item}"
+          output: { extract: "/(\\d+)_[a-f0-9]+/P0\\.jpg", coerce: number }
         - id: createListing
           operationId: createListing
           request:
-            body: { picture_ids: "${steps.slots}", ... }
+            body: { picture_ids: "${steps.pictureIds}", ... }
 ```
 
 ## Step model
@@ -51,22 +55,54 @@ Each step calls an operation (`operationId`) and stores its result under
 `steps.<id>`. Modifiers:
 
 - **`foreach: <list-template>`** — run once per element; results collected into a
-  list. The current element is `${item}` (or `${<as>}`).
+  list. The current element is `${item}` (or `${<as>}` when `as:` is set), and
+  its position is `${index}` — use `${index}` to pair this list with a parallel
+  one (e.g. each photo with its upload slot: `${steps.slots.${index}}`).
 - **`poll: { until, attempts, delay_ms }`** — repeat the request until `until`
-  resolves truthy (e.g. `"${steps.batch.result.ready}"`).
+  resolves truthy (e.g. `"${steps.batch.result.ready}"`). `until` is evaluated
+  against the step's **raw** response, so it can reference any response field
+  even when `output` extracts only part of it.
 - **`request`** — per-step overrides: `url`, `method`, `body`, `headers`,
   `no_auth` (skip auth, for presigned URLs), `transport` (`direct` | `browser`).
-- **`output: { path, extract }`** — keep `response.<path>`; `extract` runs a
-  regex and keeps the first capture group (e.g. pull a picture id from an S3 URL).
+- **`output: { path, extract, coerce }`** — keep `response.<path>`; `extract`
+  runs a regex and keeps the first capture group (e.g. pull a picture id from an
+  S3 URL); `coerce: number` parses a numeric string into a JS number (so a later
+  body sends it as a JSON number, not a string).
+- **transform step (no `operationId`)** — makes no HTTP call; shapes its `value`
+  (templated, defaults to the foreach `${item}`) through `output`. Use to derive
+  data from a prior step — e.g. map slot URLs to numeric picture ids — without a
+  round-trip:
+
+  ```yaml
+  - id: pictureIds
+    foreach: "${steps.slots}"
+    value: "${item}"
+    output: { extract: "/(\\d+)_[a-f0-9]+/P0\\.jpg", coerce: number }
+  ```
+
+The workflow's `result:` names the step whose response the command returns (or a
+dotted path into it, e.g. `createListing.slug`).
 
 ## Templates available in a workflow
 
 - `${args.<flag>}` — a CLI flag value (`${args.brand}`)
-- `${args.<flag>|<default>}` — with a literal fallback (`${args.currency|USD}`)
+- `${args.<flag>|<default>}` — with a literal fallback (`${args.currency|USD}`).
+  The fallbacks `[]` and `{}` yield a real empty array / object, not the strings
+  `"[]"` / `"{}"` — so an omitted repeatable flag becomes `[]` in the body.
 - `${steps.<id>...}` — a prior step's result
-- `${item}` / `${<as>}` — the current foreach element
+- `${item}` / `${<as>}` / `${index}` — the current foreach element / its index
 - `${uuid}` / `${now}` — generated per use
 - `${file:<expr>}` — load the file at the resolved path as bytes (binary body)
+- `${num:<expr>}` — resolve, then cast to a JS number, so a body field
+  serializes as a JSON number (`${num:args.lat}` → `37.78`, not `"37.78"`)
+- **nested** — an inner `${...}` inside another resolves first:
+  `${steps.slots.${index}}` becomes `${steps.slots.0}` then the slot URL.
+
+A whole-placeholder string (`"${steps.slots}"`) preserves the resolved value's
+type (array/object/number); a mixed string interpolates to text. In a body
+object, **keys are templated too** — `{ "${args.variant}": 1 }` → `{ "4": 1 }`,
+and an entry whose key resolves empty is dropped (so a one-size item with no
+variant yields `{}`).
 
 ## Deriving values from bundled data
 
@@ -75,6 +111,11 @@ just live endpoints. With `keyed: true` it's a key→entry lookup; with
 `key_template` the key is built from *other* args. This keeps reference-data
 transforms (category → size set, department → gender) declarative — no
 per-provider code. See `providers/depop/reference/`.
+
+Derived args resolve in declaration order, so a `key_template` can reference an
+earlier-derived arg. Depop chains two lookups for the size variant:
+`(department/type) → variant-set`, then `(variant-set/size) → variant` (the
+member id within the set), which becomes the `variants` map on the listing.
 
 ## Dry run
 

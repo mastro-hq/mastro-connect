@@ -215,10 +215,11 @@ bundled JSON file. So `--sizes M` becomes the right internal id automatically, a
 ### Multi-step flows — workflows
 
 A command can be a declarative sequence of steps with data flowing between them
-(`foreach`, `poll`-until, binary uploads, per-step transport). Depop's "list an
-item" is upload-each-photo → poll-until-processed → create-listing, expressed
-entirely in the OpenAPI doc. `--dry-run` prints every planned request body without
-sending anything. → [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md)
+(`foreach` with index pairing, `poll`-until, binary uploads, per-step transport,
+pure-transform steps, and typed/derived body fields). Depop's "list an item" is
+upload-each-photo → poll-until-processed → create-listing, expressed entirely in
+the OpenAPI doc. `--dry-run` prints every planned request body without sending
+anything. → [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md)
 
 ---
 

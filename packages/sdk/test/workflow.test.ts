@@ -61,6 +61,32 @@ test("dry-run plans every step (foreach expanded) without sending", async () => 
   expect((create?.body as { uid: string }).uid).toBe("fixed-uuid"); // generator ran
 });
 
+test("non-dry-run returns the named result step's response", async () => {
+  const spec = workflowSpec();
+  // Mock transport: slot returns a url; create returns the listing object.
+  const responses: Record<string, unknown> = {
+    slot: { url: "https://s3/pic" },
+    create: { id: 777, slug: "my-item" },
+  };
+  const runner = new WorkflowRunner({
+    spec,
+    authHeaders: () => ({ authorization: "Bearer tok" }),
+    baseContext: () => ({ auth: { token: "tok" }, uuid: () => "fixed-uuid" }),
+    apiTransport: async () => ({
+      name: "mock",
+      send: async (req: { url: string }) => ({
+        status: 200,
+        headers: {},
+        text: async () => JSON.stringify(req.url.includes("/create") ? responses.create : responses.slot),
+      }),
+    }),
+  });
+  const op = spec.byCommand("flow")!;
+  // result: "create" must resolve to the create step's response, not undefined.
+  const result = (await runner.run(op, { photo: ["a.jpg"] })) as { id: number; slug: string };
+  expect(result).toEqual({ id: 777, slug: "my-item" });
+});
+
 test("file-backed keyed resolver with key_template derives a value from other args", async () => {
   const cache = new JsonCache("wf-test", `/tmp/mastro-wf-${process.pid}`);
   const resolver = new Resolver(cache, async () => ({}), (rel) => {
