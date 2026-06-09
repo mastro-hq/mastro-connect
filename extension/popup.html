@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        width: 300px; margin: 0; padding: 14px 16px;
+      }
+      h1 { font-size: 14px; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; }
+      .logo { color: #ff2300; font-weight: 800; letter-spacing: -0.5px; }
+      .muted { opacity: 0.6; }
+      .card {
+        border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+        border-radius: 10px; padding: 11px 12px; margin-top: 12px;
+      }
+      .row { display: flex; align-items: center; gap: 8px; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+      .idle { background: #9aa0a6; }
+      .busy { background: #f5a623; animation: pulse 1.3s ease-in-out infinite; }
+      .ok { background: #2ecc71; }
+      .err { background: #e74c3c; }
+      @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.35 } }
+      ul { margin: 8px 0 0; padding-left: 16px; }
+      li { font-variant-numeric: tabular-nums; }
+      code {
+        background: color-mix(in srgb, currentColor 9%, transparent);
+        padding: 1px 5px; border-radius: 4px;
+      }
+      .hint { margin-top: 12px; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h1><span class="logo">mastro</span> · connect</h1>
+    <div class="muted">Browser session capture for mastro CLI.</div>
+
+    <div class="card">
+      <div class="row">
+        <span id="dot" class="dot idle"></span>
+        <strong id="state">Idle</strong>
+      </div>
+      <div id="detail" class="muted" style="margin-top: 6px"></div>
+    </div>
+
+    <div id="hint" class="hint muted">
+      Run <code>mastro login &lt;provider&gt;</code> in your terminal to start a
+      capture. This popup shows progress.
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

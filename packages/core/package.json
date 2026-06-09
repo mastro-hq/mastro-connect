@@ -1,0 +1,16 @@
+{
+  "name": "@mastro/core",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Schemas, types, credential store, broker and receiver for mastro-connect.",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./schemas": "./src/schemas/index.ts"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1"
+  }
+}

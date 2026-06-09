@@ -1,0 +1,176 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mastro-connect.dev/schemas/browser-auth-manifest/v1",
+  "title": "Browser Auth Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "provider_id",
+    "display_name",
+    "launch",
+    "permissions",
+    "capture",
+    "completion",
+    "serialization",
+    "security"
+  ],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "provider_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "display_name": { "type": "string" },
+    "launch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "expected_origins", "timeout_seconds"],
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "open_tab": { "type": "boolean" },
+        "expected_origins": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "timeout_seconds": { "type": "integer", "minimum": 5, "maximum": 1800 }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host_permissions"],
+      "properties": {
+        "host_permissions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "observes_cookies": { "type": "boolean" },
+        "observes_request_headers": { "type": "boolean" },
+        "observes_request_body": { "type": "boolean" },
+        "observes_response_headers": { "type": "boolean" },
+        "injects_page_bridge": { "type": "boolean" },
+        "observes_storage": { "type": "boolean" }
+      }
+    },
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cookies": { "type": "array", "items": { "$ref": "#/$defs/cookieRule" } },
+        "headers": { "type": "array", "items": { "$ref": "#/$defs/headerRule" } },
+        "page_events": { "type": "array", "items": { "$ref": "#/$defs/pageEventRule" } },
+        "storage": { "type": "array", "items": { "$ref": "#/$defs/storageRule" } }
+      }
+    },
+    "completion": { "$ref": "#/$defs/completionRule" },
+    "serialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["output_schema", "fields"],
+      "properties": {
+        "output_schema": { "type": "string" },
+        "fields": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["redact_fields", "allowed_postback_origin"],
+      "properties": {
+        "redact_fields": { "type": "array", "items": { "type": "string" } },
+        "persist_minimum": { "type": "boolean" },
+        "allowed_postback_origin": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "cookieRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "include_names_matching"],
+      "properties": {
+        "url": { "type": "string" },
+        "include_names_matching": { "type": "array", "items": { "type": "string" } },
+        "save_as": { "type": "string" }
+      }
+    },
+    "headerRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "url_matches", "include_names"],
+      "properties": {
+        "source": { "enum": ["request", "response"] },
+        "url_matches": { "type": "string" },
+        "is_regex": { "type": "boolean" },
+        "include_names": { "type": "array", "items": { "type": "string" } },
+        "save_as": { "type": "string" }
+      }
+    },
+    "pageEventRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "url_matches", "save_as"],
+      "properties": {
+        "source": { "enum": ["fetch-response", "xhr-response"] },
+        "url_matches": { "type": "string" },
+        "is_regex": { "type": "boolean" },
+        "body_json_path": { "type": "string" },
+        "save_as": { "type": "string" }
+      }
+    },
+    "storageRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["area"],
+      "properties": {
+        "area": { "enum": ["local", "session"] },
+        "keys": { "type": "array", "items": { "type": "string" } },
+        "save_as": { "type": "string" }
+      }
+    },
+    "completionRule": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["all"],
+          "properties": {
+            "all": { "type": "array", "items": { "$ref": "#/$defs/completionRule" } }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["any"],
+          "properties": {
+            "any": { "type": "array", "items": { "$ref": "#/$defs/completionRule" } }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["not"],
+          "properties": { "not": { "$ref": "#/$defs/completionRule" } }
+        },
+        { "$ref": "#/$defs/completionPredicate" }
+      ]
+    },
+    "completionPredicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "field_present": { "type": "string" },
+        "cookie_present": { "type": "string" },
+        "cookie_name_prefix_present": { "type": "string" },
+        "header_seen": { "type": "string" },
+        "storage_key_present": { "type": "string" },
+        "authenticated_response_seen": { "type": "string" }
+      }
+    }
+  }
+}

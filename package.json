@@ -1,0 +1,25 @@
+{
+  "name": "mastro-connect",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Unofficial connectors for web apps, so agents can use them. Capture a browser session, replay it against reverse-engineered APIs.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p extension/tsconfig.json",
+    "typecheck:ext": "tsc --noEmit -p extension/tsconfig.json",
+    "test": "bun test",
+    "mastro": "bun run packages/cli/src/bin.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "@types/chrome": "^0.1.42",
+    "typescript": "^6.0.3"
+  }
+}

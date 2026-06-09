@@ -1,0 +1,390 @@
+openapi: 3.1.0
+info:
+  title: Depop Web API (unofficial)
+  version: reverse-engineered-2026-06-08
+  description: >
+    Reverse-engineered from depop.com browser traffic (see README). Operational,
+    not a stable contract. The standard OpenAPI parts (paths, params, enums,
+    array style) are valid OpenAPI 3.1; the browser-replay specifics live in
+    the x-mastro-* extensions, which conformant validators ignore.
+
+servers:
+  - url: https://www.depop.com
+
+# --- replay choreography (mastro extension) --------------------------------
+# Depop's webapi sits behind Cloudflare Bot Management (JA3/JA4 fingerprinting),
+# so requests must go through a browser-impersonating transport.
+# Depop sits behind a Cloudflare *managed challenge* (a JS interstitial), which
+# TLS impersonation can't solve — so run requests through the extension's
+# authenticated tab instead. See docs/BROWSER-PROXY.md.
+x-mastro-replay:
+  via_browser: true
+  retry_on: [429, 503]
+  recapture_on: [401, 419]
+  rate_limit:
+    requests_per_minute: 30
+
+# --- how a captured session becomes a live request -------------------------
+# access_token + user_id are captured from depop.com cookies (see auth.manifest).
+# The depop-* ids are client-generated per request.
+x-mastro-auth:
+  required_fields: [access_token, user_id]
+  headers:
+    authorization: "Bearer ${auth.access_token}"
+    x-user-id: "${auth.user_id}"
+    depop-device-id: "${uuid}"
+    depop-session-id: "${uuid}"
+    depop-search-id: "${uuid}"
+    # Replay the full warmed browser cookie jar (incl. any Cloudflare clearance)
+    # so the request looks like the logged-in session, not a cold client.
+    cookie: "${auth.cookie_header}"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+security:
+  - bearerAuth: []
+
+paths:
+  # =========================================================================
+  # Search products — the main command
+  # =========================================================================
+  /presentation/api/v1/search/products/:
+    get:
+      operationId: search
+      x-mastro-command: search
+      summary: Search Depop listings.
+      description: >
+        Cursor-paginated product search. Filters mirror the website's filter
+        bar (category, brand, price, size, colour, condition, sort, on-sale).
+        `sizes` / `categories` / `brandIds` accept either the wire id or a
+        human label (resolved against the filter-metadata endpoints).
+      x-mastro-result: objects
+      parameters:
+        - name: what
+          in: query
+          required: true
+          description: Search text, e.g. "holiday knit jumper men".
+          schema: { type: string }
+
+        - name: limit
+          in: query
+          description: Results per page (default 24).
+          schema: { type: integer, default: 24, minimum: 1, maximum: 100 }
+
+        - name: after
+          in: query
+          description: Pagination cursor (page_info.last from the previous page).
+          schema: { type: string }
+
+        - name: country
+          in: query
+          description: Country code, e.g. us / gb.
+          schema: { type: string, default: us }
+
+        - name: currency
+          in: query
+          schema: { type: string, default: USD }
+
+        # --- filters -------------------------------------------------------
+        - name: categories
+          in: query
+          description: Category filter (repeatable). Department or product-type id.
+          explode: true
+          schema: { type: array, items: { type: string } }
+          x-mastro-resolve:
+            from: categoryFilters
+            value_path: categoryFilters[].children[].id
+            label_path: categoryFilters[].children[].name
+
+        - name: brandIds
+          in: query
+          description: Brand filter (repeatable). Numeric brand id or brand name.
+          explode: true
+          schema: { type: array, items: { type: string } }
+          x-mastro-resolve:
+            from: brandsById
+            value_path: brands[].id
+            label_path: brands[].name
+
+        - name: sizes
+          in: query
+          description: Size filter (repeatable). Composite size id or label (e.g. "M").
+          explode: true
+          schema: { type: array, items: { type: string } }
+          x-mastro-resolve:
+            from: sizeFilters
+            value_path: "[].children[].children[].composite_id"
+            label_path: "[].children[].children[].name"
+
+        - name: colours
+          in: query
+          description: Colour filter (repeatable).
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                [
+                  black, grey, white, brown, tan, cream, yellow, red, burgundy,
+                  orange, pink, purple, blue, navy, green, khaki, gold, silver,
+                  multi, clear,
+                ]
+
+        - name: conditions
+          in: query
+          description: Condition filter (repeatable).
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                [
+                  brand_new,
+                  used_like_new,
+                  used_excellent,
+                  used_good,
+                  used_fair,
+                ]
+
+        - name: priceMin
+          in: query
+          description: Minimum price (in the search currency).
+          schema: { type: number, minimum: 0 }
+
+        - name: priceMax
+          in: query
+          description: Maximum price (in the search currency).
+          schema: { type: number, minimum: 0 }
+
+        - name: isDiscounted
+          in: query
+          description: Only show items that are on sale.
+          schema: { type: boolean }
+
+        - name: sortBy
+          in: query
+          description: Sort order (default relevance).
+          schema:
+            type: string
+            enum: [relevance, priceAscending, priceDescending, newlyListed]
+      responses:
+        "200":
+          description: A page of matching products.
+          content:
+            application/json: {}
+        "401":
+          description: Auth expired or rejected.
+
+  # =========================================================================
+  # Current user
+  # =========================================================================
+  /api/v1/users/{user_id}/:
+    get:
+      operationId: me
+      x-mastro-command: me
+      summary: Show the logged-in user's profile.
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: Defaults to your captured user id.
+          schema: { type: string, default: "${auth.user_id}" }
+      responses:
+        "200": { description: User profile. }
+
+  # =========================================================================
+  # List an item — a multi-step workflow (upload pics → poll → create listing)
+  # The workflow itself is a synthetic path; its steps call the real endpoints.
+  # =========================================================================
+  /x-mastro/list:
+    post:
+      operationId: list
+      x-mastro-command: list
+      summary: List an item for sale.
+      description: >
+        Uploads each photo, waits for processing, then creates the listing.
+        Photos must already be square JPEGs (the depop-list-item skill handles
+        HEIC→JPEG + cropping). Use --dry-run to preview the request bodies
+        without uploading or posting.
+      x-mastro-args:
+        - { name: photo, description: "image file (repeatable, first = cover)", required: true, multiple: true }
+        - { name: brand, description: "brand slug, e.g. polo-ralph-lauren", required: true }
+        - { name: department, description: "menswear / womenswear / kidswear / everything-else", required: true,
+            enum: [menswear, womenswear, kidswear, everything-else] }
+        - { name: type, description: "product type, e.g. tshirts / jumpers / jeans", required: true }
+        - { name: size, description: "human size, e.g. M (omit for one-size)" }
+        - { name: condition, description: "item condition", required: true,
+            enum: [brand_new, used_like_new, used_excellent, used_good, used_fair] }
+        - { name: colour, description: "colour (repeatable, up to 2)", required: true, multiple: true }
+        - { name: price, description: "numeric price, e.g. 25", required: true }
+        - { name: currency, description: "default USD" }
+        - { name: description, description: "listing text (include #hashtags inline, max 5)", required: true }
+        - { name: age, description: "e.g. y2k (repeatable, up to 1)", multiple: true }
+        - { name: style, description: "e.g. streetwear (repeatable, up to 3)", multiple: true }
+        - { name: source, description: "e.g. preloved (repeatable, up to 2)", multiple: true }
+        - { name: variant-set, description: "size set id (derived from department/type)",
+            x-mastro-resolve: { from: "file:reference/categories.json", keyed: true, value_path: size_set_us,
+                                key_template: "${args.department}/${args.type}" } }
+        - { name: address-id, description: "ship-from address id", required: true }
+        - { name: address, description: 'e.g. "San Francisco, United States"', required: true }
+        - { name: lat, description: "geo latitude", required: true }
+        - { name: lng, description: "geo longitude", required: true }
+        - { name: gender, description: "male / female / unisex (derived from department)",
+            x-mastro-resolve: { from: "file:reference/department_gender.json", keyed: true,
+                                key_template: "${args.department}" } }
+        - { name: parcel-size, description: "small/medium/large/xl/xxl (default medium)" }
+        - { name: no-boost, description: "disable the free boost", boolean: true }
+      x-mastro-workflow:
+        result: createListing
+        steps:
+          # 1. Request an upload slot per photo (returns a presigned S3 URL).
+          - id: slots
+            operationId: uploadPicture
+            foreach: "${args.photo}"
+            as: photo
+            request:
+              body: { type: product, extension: jpg, dimensions: { width: 1280, height: 1280 } }
+            output: { path: url }
+
+          # 2. PUT the bytes to S3 (presigned → no auth, direct transport).
+          - id: uploads
+            operationId: s3Put
+            foreach: "${steps.slots}"
+            as: slotUrl
+            request:
+              url: "${item}"
+              no_auth: true
+              headers: { content-type: image/jpeg }
+              # NOTE: foreach over slot URLs; the matching photo is by index — for
+              # the dry-run preview we reference the first photo. Live upload pairs
+              # them positionally in the runner.
+              body: "${file:args.photo}"
+
+          # 3. Validate + poll until processed.
+          - id: validate
+            operationId: validatePictures
+            request:
+              body: { picture_ids: "${steps.slots}" }
+
+          # 4. Create the listing.
+          - id: createListing
+            operationId: createListing
+            request:
+              body:
+                brand: "${args.brand}"
+                colour: "${args.colour}"
+                condition: "${args.condition}"
+                description: "${args.description}"
+                gender: "${args.gender}"
+                country: US
+                address: "${args.address}"
+                geo_position_lat: "${args.lat}"
+                geo_position_lng: "${args.lng}"
+                price_amount: "${args.price}"
+                price_currency: "${args.currency|USD}"
+                product_type: "${args.type}"
+                national_shipping_cost: "0.00"
+                shipping_methods:
+                  - payer: buyer
+                    parcel_size: "${args.parcel-size|medium}"
+                    shipping_provider_id: USPS
+                    ship_from_address_id: "${args.address-id}"
+                attributes: {}
+                age: "${args.age}"
+                style: "${args.style}"
+                source: "${args.source}"
+                boost: { status: active }
+                variant_set: "${args.variant-set}"
+                quantity: 1
+                listing_lifecycle_id: "${uuid}"
+                persistent_id: "${uuid}"
+      responses:
+        "201": { description: Listing created. }
+
+  /presentation/api/v1/listing/products/:
+    post:
+      operationId: createListing
+      x-mastro-hidden: true
+      summary: Create the listing (final step of the list workflow).
+      responses:
+        "201": { description: Listing created. }
+
+  /api/v4/pictures/:
+    post:
+      operationId: uploadPicture
+      x-mastro-hidden: true
+      summary: Request an S3 upload slot for a product picture.
+      responses:
+        "201": { description: Presigned upload URL. }
+
+  # Synthetic op for the S3 PUT step (URL comes from the slot; host differs).
+  /s3-put:
+    put:
+      operationId: s3Put
+      x-mastro-hidden: true
+      summary: PUT image bytes to a presigned S3 URL.
+      responses:
+        "200": { description: Uploaded. }
+
+  /internal/v1/pictures/validate/:
+    post:
+      operationId: validatePictures
+      x-mastro-hidden: true
+      summary: Validate uploaded pictures.
+      responses:
+        "200": { description: Validation accepted. }
+
+  /api/v1/pictures/batch/{ids}/:
+    get:
+      operationId: pictureBatch
+      x-mastro-hidden: true
+      summary: Poll picture processing status.
+      parameters:
+        - { name: ids, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Picture batch status. }
+
+  # =========================================================================
+  # Filter-metadata endpoints — hidden from the CLI, used by x-mastro-resolve
+  # =========================================================================
+  /presentation/api/v1/search/sizeFilters/:
+    get:
+      operationId: sizeFilters
+      x-mastro-hidden: true
+      summary: Size taxonomy (department → category → size-set → size).
+      responses:
+        "200": { description: Size filter tree. }
+
+  /api/v3/search/categoryFilters/:
+    get:
+      operationId: categoryFilters
+      x-mastro-hidden: true
+      summary: Category taxonomy (department → product category).
+      responses:
+        "200": { description: Category filter tree. }
+
+  /api/v2/search/attributes/brands/byId/:
+    get:
+      operationId: brandsById
+      x-mastro-hidden: true
+      summary: Brand id ↔ name lookup.
+      responses:
+        "200": { description: Brand list. }
+
+  /api/v2/search/filters/filterProductAttributes/:
+    get:
+      operationId: filterAttributes
+      x-mastro-hidden: true
+      summary: Condition + colour attribute metadata.
+      parameters:
+        - name: country
+          in: query
+          schema: { type: string, default: en }
+      responses:
+        "200": { description: Condition and colour vocabularies. }

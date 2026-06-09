@@ -1,0 +1,14 @@
+# Redocly config for the Depop connector spec.
+#
+# The spec is a valid OpenAPI 3.1 document; these two rules are Redocly *style*
+# opinions that conflict with faithfully describing a real reverse-engineered
+# API:
+#   - no-path-trailing-slash: Depop's real paths DO end in "/" (e.g.
+#     /presentation/api/v1/search/products/). We must keep them to match.
+#   - operation-4xx-response: the hidden metadata endpoints document only the
+#     2xx shape we consume; enumerating every error code adds no value here.
+extends:
+  - recommended
+rules:
+  no-path-trailing-slash: off
+  operation-4xx-response: off
