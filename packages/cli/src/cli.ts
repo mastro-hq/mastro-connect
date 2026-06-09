@@ -10,14 +10,6 @@
  * Built-in verbs are handled directly; anything else is treated as a provider
  * id and dispatched dynamically from that provider's OpenAPI operations.
  */
-import {
-  BrokerError,
-  ProviderNotFoundError,
-  SchemaError,
-} from "@mastro/core";
-import { NotAuthenticatedError, RecaptureRequiredError, ApiError } from "@mastro/sdk";
-
-import { UsageError } from "./args.ts";
 import { createContext } from "./context.ts";
 import { login } from "./commands/login.ts";
 import { logout } from "./commands/logout.ts";
@@ -68,33 +60,23 @@ export async function main(argv: string[]): Promise<number> {
   }
 }
 
+/**
+ * Map any thrown value to a clean message + exit code. Every mastro error type
+ * (UsageError, NotAuthenticatedError, BrokerError, …) already carries an
+ * actionable message, so we print that and exit. An error may opt into a
+ * non-default exit code by exposing a numeric `exitCode` (UsageError → 2);
+ * everything else exits 1. New error types work without editing this function.
+ */
 function handleError(err: unknown): number {
-  if (err instanceof UsageError) {
-    ui.error(err.message);
-    return 2;
-  }
-  if (err instanceof ProviderNotFoundError) {
-    ui.error(err.message);
-    return 1;
-  }
-  if (err instanceof NotAuthenticatedError || err instanceof RecaptureRequiredError) {
-    ui.error(err.message);
-    return 1;
-  }
-  if (err instanceof BrokerError) {
-    ui.error(err.message);
-    return 1;
-  }
-  if (err instanceof ApiError) {
-    ui.error(err.message);
-    return 1;
-  }
-  if (err instanceof SchemaError) {
-    ui.error(err.message);
-    return 1;
-  }
   ui.error(err instanceof Error ? err.message : String(err));
-  return 1;
+  return exitCodeOf(err);
+}
+
+function exitCodeOf(err: unknown): number {
+  // A handled error is always a failure: honor a custom positive code (e.g.
+  // UsageError's 2) but never let an `exitCode: 0` mask the failure as success.
+  const code = (err as { exitCode?: unknown } | null)?.exitCode;
+  return typeof code === "number" && code > 0 ? code : 1;
 }
 
 function printHelp(): void {

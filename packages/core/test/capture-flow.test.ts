@@ -80,6 +80,62 @@ test("broker rejects a capture missing api-profile required fields", async () =>
   await expect(promise).rejects.toThrow(/missing required field/);
 });
 
+/** Drive a capture by simulating the extension's bundle POST. */
+function simulateCapture(url: string, credentials: Record<string, unknown>): Promise<void> {
+  const base = new URL(url).origin;
+  const sessionId = url.split("/").pop()!;
+  return fetch(`${base}/api/browser-auth/captures/${sessionId}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "http://127.0.0.1" },
+    body: JSON.stringify({
+      schema_version: "capture-bundle/v1",
+      provider_id: "depop",
+      captured_at: Math.floor(Date.now() / 1000),
+      credentials,
+    }),
+  }).then(() => undefined);
+}
+
+test("verify probe success is recorded on the credential", async () => {
+  const registry = new ProviderRegistry([PROVIDERS_ROOT]);
+  const store = new FileStore(TMP);
+  const broker = new AuthBroker(store);
+  const depop = registry.load("depop"); // spec declares x-mastro-auth.verify
+
+  let probed = false;
+  const credential = await broker.capture(
+    depop,
+    { onBootstrapUrl: (url) => simulateCapture(url, { access_token: "t", user_id: "42" }) },
+    {
+      verify: async () => {
+        probed = true;
+        return { ok: true, checked_at: 123 };
+      },
+    },
+  );
+
+  expect(probed).toBe(true);
+  expect(credential.validation).toEqual({ ok: true, checked_at: 123 });
+  expect(store.get("depop")?.validation?.ok).toBe(true);
+});
+
+test("a failed verify probe rejects login but persists the failure for status", async () => {
+  const registry = new ProviderRegistry([PROVIDERS_ROOT]);
+  const store = new FileStore(TMP);
+  const broker = new AuthBroker(store);
+  const depop = registry.load("depop");
+
+  const promise = broker.capture(
+    depop,
+    { onBootstrapUrl: (url) => simulateCapture(url, { access_token: "t", user_id: "42" }) },
+    { verify: async () => ({ ok: false, checked_at: 1, detail: "HTTP 401" }) },
+  );
+
+  await expect(promise).rejects.toThrow(/test call failed.*HTTP 401/s);
+  // The failed result is still stored, so `mastro status` can show it.
+  expect(store.get("depop")?.validation).toEqual({ ok: false, checked_at: 1, detail: "HTTP 401" });
+});
+
 test("receiver rejects a capture from a disallowed origin", async () => {
   const registry = new ProviderRegistry([PROVIDERS_ROOT]);
   const depop = registry.load("depop");

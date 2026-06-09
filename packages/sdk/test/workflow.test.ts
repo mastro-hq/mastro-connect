@@ -5,7 +5,46 @@
 import { expect, test } from "bun:test";
 
 import { OpenApiSpec, type OpenApiDocument } from "@mastro/core";
-import { Resolver, JsonCache, WorkflowRunner } from "../src/index.ts";
+import { MissingTemplateValue, Resolver, JsonCache, WorkflowRunner } from "../src/index.ts";
+
+/** A one-step workflow whose create body is supplied by the caller (for strict tests). */
+function bodySpec(body: unknown): OpenApiSpec {
+  const doc: OpenApiDocument = {
+    openapi: "3.1.0",
+    info: { title: "wf", version: "1" },
+    servers: [{ url: "https://api.example.com" }],
+    paths: {
+      "/x/flow": {
+        post: {
+          operationId: "flow",
+          "x-mastro-command": "flow",
+          "x-mastro-workflow": {
+            steps: [
+              { id: "upload", operationId: "up", output: { path: "url" } },
+              { id: "create", operationId: "create", request: { body } },
+            ],
+          },
+          "x-mastro-args": [{ name: "title", required: true }],
+        },
+      },
+      "/up": { post: { operationId: "up", "x-mastro-hidden": true } },
+      "/create": { post: { operationId: "create", "x-mastro-hidden": true } },
+    },
+  };
+  return new OpenApiSpec(doc);
+}
+
+function dryRunner(spec: OpenApiSpec): WorkflowRunner {
+  return new WorkflowRunner({
+    spec,
+    authHeaders: () => ({}),
+    baseContext: () => ({ uuid: () => "u" }),
+    apiTransport: async () => {
+      throw new Error("must not send in dry-run");
+    },
+    dryRun: true,
+  });
+}
 
 function workflowSpec(): OpenApiSpec {
   const doc: OpenApiDocument = {
@@ -59,6 +98,27 @@ test("dry-run plans every step (foreach expanded) without sending", async () => 
   expect(steps).toContain("create");
   const create = result.planned_requests.find((r) => r.step === "create");
   expect((create?.body as { uid: string }).uid).toBe("fixed-uuid"); // generator ran
+});
+
+test("strict dry-run rejects a typo'd ${args.*} reference", async () => {
+  // The body references a flag that doesn't exist (`titel` vs `title`).
+  const spec = bodySpec({ name: "${args.titel}" });
+  const runner = dryRunner(spec);
+  const op = spec.byCommand("flow")!;
+  await expect(runner.run(op, { title: "hello" })).rejects.toThrow(MissingTemplateValue);
+});
+
+test("strict dry-run still accepts a valid ${steps.*} chain (output is stubbed)", async () => {
+  // `${steps.upload.url}` is unknown at plan time but must NOT trip strict mode.
+  const spec = bodySpec({ name: "${args.title}", pic: "${steps.upload.url}" });
+  const runner = dryRunner(spec);
+  const op = spec.byCommand("flow")!;
+  const result = (await runner.run(op, { title: "hello" })) as {
+    planned_requests: { step: string; body?: { name?: string; pic?: string } }[];
+  };
+  const create = result.planned_requests.find((r) => r.step === "create");
+  expect(create?.body?.name).toBe("hello"); // real arg resolved
+  expect(create?.body?.pic).toBe("<pending>"); // stubbed step output, no throw
 });
 
 test("non-dry-run returns the named result step's response", async () => {

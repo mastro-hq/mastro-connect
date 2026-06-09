@@ -15,7 +15,13 @@ export {
   unixNow,
   type CredentialStore,
 } from "./store.ts";
-export { AuthBroker, BrokerError, type CaptureEvents } from "./broker.ts";
+export {
+  AuthBroker,
+  BrokerError,
+  type CaptureEvents,
+  type CaptureOptions,
+  type CredentialVerifier,
+} from "./broker.ts";
 export { Receiver, type SessionPayload, type SessionStatus } from "./receiver.ts";
 export {
   ProxyServer,

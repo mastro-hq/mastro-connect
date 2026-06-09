@@ -24,6 +24,7 @@ import {
   type OperationView,
   type Parameter,
   type Provider,
+  type ValidationResult,
 } from "@mastro/core";
 
 import { BrowserTransport } from "./browser-transport.ts";
@@ -32,6 +33,8 @@ import { Resolver, type MetadataFetcher } from "./resolver.ts";
 import { WorkflowRunner } from "./workflow.ts";
 import { renderDeep, renderStringMap, renderTemplate, type TemplateContext } from "./template.ts";
 import { selectTransport, type HttpResponse, type Transport } from "./transport.ts";
+import { throttled } from "./throttle.ts";
+import { getPath, parseMaybeJson, sleep } from "./util.ts";
 
 export class NotAuthenticatedError extends Error {
   constructor(public readonly providerId: string, message?: string) {
@@ -67,6 +70,9 @@ export interface CallResult {
 
 export class Connector {
   private transport?: Transport;
+  /** The unwrapped base transport (the throttle wrapper hides it) — kept so
+   * `close()` can release a BrowserTransport's proxy server. */
+  private baseTransport?: Transport;
   private readonly resolver: Resolver;
 
   private constructor(
@@ -83,9 +89,6 @@ export class Connector {
 
   /** Build a connector, loading + checking the credential up front. */
   static load(provider: Provider, store: CredentialStore): Connector {
-    if (!provider.spec) {
-      throw new Error(`provider "${provider.id}" has no OpenAPI spec; nothing to call`);
-    }
     const credential = store.get(provider.id);
     if (!credential) throw new NotAuthenticatedError(provider.id);
     if (isExpired(credential)) {
@@ -93,6 +96,17 @@ export class Connector {
         provider.id,
         `session for "${provider.id}" expired. Run: mastro login ${provider.id}`,
       );
+    }
+    return Connector.forCredential(provider, credential);
+  }
+
+  /**
+   * Build a connector against an explicit credential, bypassing the store. Used
+   * to verify a freshly-captured credential before it's persisted.
+   */
+  static forCredential(provider: Provider, credential: { fields: Record<string, unknown> }): Connector {
+    if (!provider.spec) {
+      throw new Error(`provider "${provider.id}" has no OpenAPI spec; nothing to call`);
     }
     return new Connector(provider, provider.spec, credential);
   }
@@ -104,6 +118,40 @@ export class Connector {
 
   byCommand(command: string): OperationView | undefined {
     return this.spec.byCommand(command);
+  }
+
+  /**
+   * Probe the live session by calling the spec's `x-mastro-auth.verify`
+   * operation. Returns a structured result (never throws): `ok: true` on a 2xx,
+   * `ok: false` with a reason otherwise. Used right after capture so a stored
+   * credential's `validation` reflects whether it actually works.
+   */
+  async verify(): Promise<ValidationResult> {
+    const verifyOp = this.spec.auth().verify;
+    if (!verifyOp) return { ok: true, checked_at: unixNow(), detail: "no verify operation declared" };
+
+    try {
+      const op = this.spec.byOperationId(verifyOp.operationId);
+      if (!op) {
+        return {
+          ok: false,
+          checked_at: unixNow(),
+          detail: `verify references unknown operation "${verifyOp.operationId}"`,
+        };
+      }
+      await this.call(op, {});
+      return { ok: true, checked_at: unixNow() };
+    } catch (err) {
+      const detail =
+        err instanceof RecaptureRequiredError
+          ? `HTTP ${err.status}`
+          : err instanceof ApiError
+            ? `HTTP ${err.status}`
+            : err instanceof Error
+              ? err.message
+              : String(err);
+      return { ok: false, checked_at: unixNow(), detail };
+    }
   }
 
   /**
@@ -287,7 +335,12 @@ export class Connector {
       url,
       headers: this.buildHeaders(op),
     });
-    return parseMaybeJson(await res.text());
+    const text = await res.text();
+    // Apply the same status mapping as a normal call, so a 401 mid-resolution
+    // surfaces as an actionable RecaptureRequiredError instead of being parsed
+    // as if it were a taxonomy body.
+    this.checkStatus(res.status, text);
+    return parseMaybeJson(text);
   }
 
   // -- transport + status handling ------------------------------------------
@@ -295,17 +348,21 @@ export class Connector {
   private async getTransport(): Promise<Transport> {
     if (!this.transport) {
       const replay = this.spec.replay();
-      this.transport = replay.via_browser
+      this.baseTransport = replay.via_browser
         ? new BrowserTransport()
         : await selectTransport(replay.impersonate_browser ?? false);
+      // Pace every replayed request to the provider's declared budget. One
+      // bucket per connector so a workflow's foreach and the main call share it.
+      this.transport = throttled(this.baseTransport, replay.rate_limit?.requests_per_minute);
     }
     return this.transport;
   }
 
   /** Release any transport resources (e.g. the browser-proxy server). */
   close(): void {
-    if (this.transport instanceof BrowserTransport) this.transport.stop();
+    if (this.baseTransport instanceof BrowserTransport) this.baseTransport.stop();
     this.transport = undefined;
+    this.baseTransport = undefined;
   }
 
   private async sendWithRetry(
@@ -349,23 +406,4 @@ function appendQuery(query: URLSearchParams, param: Parameter, values: string[])
 
 function firstContentType(reqBody: { content: Record<string, unknown> }): string | undefined {
   return Object.keys(reqBody.content)[0];
-}
-
-function parseMaybeJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
-}
-
-function getPath(obj: unknown, path: string): unknown {
-  return path.split(".").reduce<unknown>((acc, key) => {
-    if (acc == null || typeof acc !== "object") return undefined;
-    return (acc as Record<string, unknown>)[key];
-  }, obj);
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
 }

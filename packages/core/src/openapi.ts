@@ -238,6 +238,14 @@ export interface MastroAuth {
   /** Capture-bundle fields that must be present to call any secured operation. */
   required_fields?: string[];
   /**
+   * Optional post-capture liveness check. After `mastro login` persists a
+   * credential, the broker calls this operation once; a 2xx confirms the
+   * session actually works (not just that the required fields are present), and
+   * the real outcome is stored in the credential's `validation`. Name a cheap,
+   * read-only operation (e.g. Depop's `me`). Omit to skip verification.
+   */
+  verify?: { operationId: string };
+  /**
    * Headers added to every request. Templates resolve against the persisted
    * credential and generators, e.g.:
    *   "authorization": "Bearer ${auth.access_token}"

@@ -23,6 +23,7 @@ import type {
 
 import { renderDeep, renderTemplate, renderTemplateString, type TemplateContext } from "./template.ts";
 import { FetchTransport, type Transport } from "./transport.ts";
+import { getPath, parseMaybeJson, sleep } from "./util.ts";
 
 export class WorkflowError extends Error {
   constructor(public readonly step: string, message: string) {
@@ -61,6 +62,18 @@ export class WorkflowRunner {
 
   constructor(private readonly deps: WorkflowDeps) {}
 
+  /**
+   * Template strictness. Under --dry-run we render strictly so an authoring
+   * mistake — a typo'd `${args.colour}` or a missing field — fails loudly at
+   * plan time instead of silently producing an empty value and sending a broken
+   * request later. Live execution stays lenient (network/session state is
+   * legitimately partial mid-flow). `${steps.*}` refs are exempt even in
+   * dry-run because step outputs are stubbed, not real (see `stepStub`).
+   */
+  private opts(): { strict?: boolean } {
+    return { strict: this.deps.dryRun ?? false };
+  }
+
   /** Run a workflow operation and return the configured result. */
   async run(op: OperationView, args: Record<string, unknown>): Promise<unknown> {
     const workflow = op.operation["x-mastro-workflow"];
@@ -88,7 +101,7 @@ export class WorkflowRunner {
     args: Record<string, unknown>,
   ): Promise<unknown> {
     if (step.foreach) {
-      const items = asArray(renderTemplate(step.foreach, ctx(), { strict: false }));
+      const items = asArray(renderTemplate(step.foreach, ctx(), this.opts()));
       const results: unknown[] = [];
       for (let index = 0; index < items.length; index++) {
         const item = items[index];
@@ -115,7 +128,7 @@ export class WorkflowRunner {
     // Used to derive one step's data from another (e.g. picture ids from slot
     // URLs) without an extra round-trip.
     if (!step.operationId) {
-      const raw = step.value !== undefined ? renderTemplate(step.value, ctx(), { strict: false }) : ctx().item;
+      const raw = step.value !== undefined ? renderTemplate(step.value, ctx(), this.opts()) : ctx().item;
       return this.applyOutput(step, raw);
     }
 
@@ -149,20 +162,22 @@ export class WorkflowRunner {
 
     const method = (req.method ?? op.method).toUpperCase();
     const url = req.url
-      ? renderTemplateString(req.url, c, { strict: false })
+      ? renderTemplateString(req.url, c, this.opts())
       : this.deps.spec.baseUrl().replace(/\/$/, "") + op.path;
 
     const headers: Record<string, string> = req.no_auth ? {} : { ...this.deps.authHeaders() };
     if (req.headers) {
-      for (const [k, v] of Object.entries(req.headers)) headers[k] = renderTemplateString(v, c, { strict: false });
+      for (const [k, v] of Object.entries(req.headers)) headers[k] = renderTemplateString(v, c, this.opts());
     }
 
     const body = this.buildBody(req.body, headers, c);
 
     if (this.deps.dryRun) {
       this.planned.push({ step: step.id, method, url, headers: redactAuth(headers), body: previewBody(body) });
-      // A placeholder keeps downstream templating from crashing on missing refs.
-      return { dryRun: true };
+      // A stub keeps downstream `${steps.<id>.<anything>}` refs resolvable (and
+      // thus non-throwing under strict dry-run), since the real output is
+      // unknown until the request actually runs.
+      return stepStub();
     }
 
     const transport = req.transport === "direct" || req.no_auth ? this.direct : await this.deps.apiTransport();
@@ -199,14 +214,17 @@ export class WorkflowRunner {
     if (typeof bodyTemplate === "string") {
       const file = bodyTemplate.match(/^\$\{file:(.+)\}$/);
       if (file) {
+        // Read the bytes even in dry-run: it's a cheap way to catch a missing
+        // photo before anything is sent. The path ref stays lenient (the user
+        // gives a literal filename, not a templated field that could be typo'd).
         const path = renderTemplateString(`\${${file[1]!.trim()}}`, ctx, { strict: false });
         const bytes = readFileSync(path);
         return new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
       }
-      return renderTemplateString(bodyTemplate, ctx, { strict: false });
+      return renderTemplateString(bodyTemplate, ctx, this.opts());
     }
 
-    const rendered = renderDeep(bodyTemplate, ctx, { strict: false });
+    const rendered = renderDeep(bodyTemplate, ctx, this.opts());
     if (!headers["content-type"]) headers["content-type"] = "application/json";
     return JSON.stringify(rendered);
   }
@@ -236,6 +254,38 @@ function asArray(v: unknown): unknown[] {
   return Array.isArray(v) ? v : [v];
 }
 
+/** Marker value a dry-run step output collapses to in previews and JSON. */
+const PENDING = "<pending>";
+
+/**
+ * A dry-run stand-in for a step's real (unknown) output. Any *string* property
+ * access — `${steps.upload.url}`, `${steps.batch.result.ready}` — returns
+ * another stub, so a downstream reference resolves to a non-undefined
+ * placeholder and doesn't trip strict templating. Serialization and coercion
+ * hooks (toJSON, Symbol.*, valueOf, toString) instead collapse to the PENDING
+ * string, so `JSON.stringify` and template interpolation terminate cleanly
+ * rather than recursing forever.
+ */
+function stepStub(): unknown {
+  return new Proxy(
+    { toJSON: () => PENDING },
+    {
+      get(_t, prop) {
+        // Anything the runtime asks for by symbol, or the well-known coercion
+        // methods, must yield a real primitive — not another stub.
+        if (typeof prop === "symbol") return undefined;
+        // CRITICAL: must NOT be thenable. `await stepStub()` (every dry-run step
+        // result is awaited) would call `.then(resolve, reject)`; if `then`
+        // returned another stub/function it would recurse forever. Keep `then`
+        // out of the coercion group below so the stub stays a plain value.
+        if (prop === "then") return undefined;
+        if (prop === "toJSON" || prop === "toString" || prop === "valueOf") return () => PENDING;
+        return stepStub();
+      },
+    },
+  );
+}
+
 /** Mask sensitive headers in a dry-run preview. */
 function redactAuth(headers: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
@@ -259,26 +309,4 @@ function truthy(v: unknown): boolean {
   if (v == null || v === false || v === "" || v === "false") return false;
   if (Array.isArray(v)) return v.length > 0;
   return true;
-}
-
-function parseMaybeJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
-}
-
-function getPath(obj: unknown, path: string): unknown {
-  const segments = path.split(".").filter(Boolean);
-  let cur: unknown = obj;
-  for (const seg of segments) {
-    if (cur == null || typeof cur !== "object") return undefined;
-    cur = (cur as Record<string, unknown>)[seg];
-  }
-  return cur;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
 }

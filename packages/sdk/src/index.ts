@@ -25,6 +25,7 @@ export {
 } from "./template.ts";
 export { Resolver, extractPath, type TaxonomyEntry, type MetadataFetcher } from "./resolver.ts";
 export { JsonCache } from "./cache.ts";
+export { TokenBucket, throttled } from "./throttle.ts";
 export {
   WorkflowRunner,
   WorkflowError,

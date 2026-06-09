@@ -9,6 +9,15 @@
  * The API-replay half is described by the provider's OpenAPI 3.1 document (with
  * `x-mastro-*` extensions); see `openapi.ts`. Everything here is declarative so
  * a provider is "data, not code".
+ *
+ * The AuthManifest shape lives in THREE places that must stay in lockstep:
+ *   1. this file (the canonical TS contract the broker/registry consume),
+ *   2. `schemas/browser-auth-manifest.schema.json` (runtime validation), and
+ *   3. `extension/types.d.ts` (the extension's checkJs mirror — it can't import
+ *      from here without breaking its isolation).
+ * Changing a capture field here means updating (2) and (3). The schema/extension
+ * pair is guarded by `core/test/extension-types-drift.test.ts`, which fails if a
+ * schema field is missing from the extension mirror.
  */
 
 // ---------------------------------------------------------------------------
