@@ -37,11 +37,15 @@ export interface Transport {
 export class FetchTransport implements Transport {
   readonly name = "fetch";
 
+  /** @param timeoutMs abort a stuck request rather than hanging forever. */
+  constructor(private readonly timeoutMs = 30_000) {}
+
   async send(req: HttpRequest): Promise<HttpResponse> {
     const res = await fetch(req.url, {
       method: req.method,
       headers: req.headers,
       body: req.body,
+      signal: AbortSignal.timeout(this.timeoutMs),
     });
     return {
       status: res.status,

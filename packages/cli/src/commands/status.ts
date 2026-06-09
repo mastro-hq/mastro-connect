@@ -15,6 +15,9 @@ export function status(ctx: CliContext, asJson: boolean): number {
       captured_at: cred.captured_at,
       expires_at: cred.expires_at ?? null,
       expires_in_seconds: cred.expires_at ? cred.expires_at - unixNow() : null,
+      // null when the provider has no verify op (capture was never probed).
+      verified: cred.validation ? cred.validation.ok : null,
+      verified_at: cred.validation?.checked_at ?? null,
     };
   });
 
@@ -31,7 +34,15 @@ export function status(ctx: CliContext, asJson: boolean): number {
   ui.heading("Logged-in connectors");
   for (const r of rows) {
     const badge = r.state === "active" ? pc.green("● active") : pc.red("● expired");
-    console.error(`  ${badge}  ${pc.bold(r.provider)}`);
+    // Only show a verification note when the provider actually probed the
+    // session — `null` means "not checked", which we leave unannotated.
+    const verified =
+      r.verified === true
+        ? pc.dim(" (verified)")
+        : r.verified === false
+          ? pc.red(" (verification failed)")
+          : "";
+    console.error(`  ${badge}  ${pc.bold(r.provider)}${verified}`);
   }
   return 0;
 }

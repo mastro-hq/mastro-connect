@@ -138,6 +138,9 @@ function validateEnum(flag: CliFlag, value: string | boolean | string[]): void {
 }
 
 export class UsageError extends Error {
+  /** A usage mistake exits 2 (distinct from a runtime failure's 1). */
+  readonly exitCode = 2;
+
   constructor(message: string) {
     super(message);
     this.name = "UsageError";

@@ -42,6 +42,9 @@ beforeAll(() => {
         ]);
       }
       if (url.pathname === "/expired/") return new Response("gone", { status: 419 });
+      // A taxonomy endpoint whose session has lapsed — used to prove a 401 during
+      // x-mastro-resolve surfaces as RecaptureRequiredError, not a parsed body.
+      if (url.pathname === "/recapFilters/") return new Response("nope", { status: 401 });
       return new Response("not found", { status: 404 });
     },
   });
@@ -98,6 +101,28 @@ function makeProvider(origin: string): Provider {
       "/expired/": {
         get: { operationId: "expired", "x-mastro-command": "expired" },
       },
+      "/searchRecap/": {
+        get: {
+          operationId: "searchRecap",
+          "x-mastro-command": "searchRecap",
+          parameters: [
+            {
+              name: "sizes",
+              in: "query",
+              explode: true,
+              schema: { type: "array", items: { type: "string" } },
+              "x-mastro-resolve": {
+                from: "recapFilters",
+                value_path: "[].id",
+                label_path: "[].name",
+              },
+            },
+          ],
+        },
+      },
+      "/recapFilters/": {
+        get: { operationId: "recapFilters", "x-mastro-hidden": true },
+      },
     },
   };
   const manifest = { provider_id: "mock", display_name: "Mock" } as Provider["manifest"];
@@ -151,4 +176,13 @@ test("recapture_on status → RecaptureRequiredError", async () => {
   const connector = Connector.load(provider, storeWith(validCred));
   const op = connector.byCommand("expired")!;
   await expect(connector.call(op, {})).rejects.toThrow(RecaptureRequiredError);
+});
+
+test("a 401 while resolving a taxonomy → RecaptureRequiredError (not a parsed body)", async () => {
+  const provider = makeProvider(server.url.origin);
+  const connector = Connector.load(provider, storeWith(validCred));
+  const op = connector.byCommand("searchRecap")!;
+  // Resolving --sizes hits /recapFilters/, which 401s; that must propagate as a
+  // recapture signal rather than being swallowed into an empty taxonomy.
+  await expect(connector.call(op, { sizes: ["M"] })).rejects.toThrow(RecaptureRequiredError);
 });

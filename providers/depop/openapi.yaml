@@ -29,6 +29,11 @@ x-mastro-replay:
 # The depop-* ids are client-generated per request.
 x-mastro-auth:
   required_fields: [access_token, user_id]
+  # After capture, mastro calls this cheap read-only op once to confirm the
+  # session actually works (not just that the cookies are present), and stores
+  # the real result in the credential. A 401/419 here means re-login.
+  verify:
+    operationId: me
   headers:
     authorization: "Bearer ${auth.access_token}"
     x-user-id: "${auth.user_id}"
