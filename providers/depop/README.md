@@ -53,9 +53,23 @@ mastro depop search ...
 
 | Command  | Endpoint / flow                                 |
 | -------- | ----------------------------------------------- |
-| `search` | `GET /presentation/api/v1/search/products/`     |
-| `me`     | `GET /api/v1/users/{user_id}/`                  |
+| `search` | `GET https://www.depop.com/presentation/api/v1/search/products/` |
+| `me`     | `GET /api/v1/users/{user_id}/` — ⚠️ see host note (currently 404s) |
 | `list`   | multi-step workflow: upload photos → poll → create listing |
+
+> **Host split (important — it's the #1 source of 404s).** Depop serves its API
+> from **two** hosts. `www.depop.com` answers the `/presentation/*` search path.
+> Everything under `/api/*` and `/internal/*` — picture upload, validate,
+> batch-poll, `users/{id}` — plus the listing-create POST lives on
+> **`webapi.depop.com`**. Hitting an `/api/*` path on `www` returns a Next.js
+> **404 HTML page** (`__next_error__`), not JSON — that HTML 404 is the signature
+> of "right path, wrong host." Workflow steps that need the webapi host set an
+> explicit `request.url`.
+>
+> ⚠️ **Known gap:** the `me` command is a plain (non-workflow) operation, so it
+> can't set a per-step URL and still hits `www` → 404. It needs an operation-level
+> host override (the workflow `list` steps already work around this with explicit
+> `request.url`s).
 
 ### Listing an item
 
@@ -74,17 +88,15 @@ mastro depop list \
 
 - **Photos must be square JPEGs** (the `depop-list-item` skill handles
   HEIC→JPEG + cropping; mastro uploads them as-is).
-- `variant_set` and `gender` are **derived** from `--department`/`--type` via
-  bundled reference data (`reference/categories.json`,
-  `reference/department_gender.json`) — you don't pass internal ids.
+- `variant_set`, `gender`, and the size **`variant`** are **derived** from
+  `--department`/`--type`/`--size` via bundled reference data
+  (`reference/categories.json`, `reference/department_gender.json`,
+  `reference/size_variants.json`) — you don't pass internal ids. The size maps
+  through two keyed lookups: `(department/type)→size_set`, then
+  `(size_set/size)→variant` member id, which becomes the `variants` map on the
+  listing so the size attaches correctly.
 - **`--dry-run` builds and prints every request body without uploading or
   posting** — always dry-run first. See [`docs/WORKFLOWS.md`](../../docs/WORKFLOWS.md).
-
-> Known limitation: mapping a human `--size` (e.g. `M`) to its numeric variant
-> id depends on the resolved size-set, a two-step lookup not yet wired — the
-> dry-run body currently omits `variants`. The category→size-set and
-> department→gender derivations work. (`reference/size_sets.json` is bundled for
-> when that lands.)
 
 ### Search filters
 
@@ -126,5 +138,12 @@ notice. If `search` starts returning Cloudflare HTML or a shape without an
 > `isDiscounted`, `sortBy`) were recovered from the response payloads. The
 > `sortBy` enum values should be re-verified on the next capture.
 
-> The write flow (image upload + listing creation) from the original `depop-cli`
-> is intentionally **not** exposed here yet — this connector is read-only.
+> The write flow (image upload + listing creation), ported from the original
+> `depop-cli`, **is** implemented as the `list` workflow (verified live). Its
+> createListing body must match Depop's exactly or the endpoint returns an opaque
+> `400` ("Request failed with status code 400") — the ground-truth shape is
+> `depop-cli`'s `build_listing_body` + the appended `picture_ids`. Watch these on
+> drift: the `webapi.depop.com` host for the write endpoints, integer
+> `picture_ids` (extracted from the slot S3 URL), numeric `geo_position_*` /
+> `ship_from_address_id` / `variant_set`, `quantity: null` when `variants` is set,
+> and `is_kids`.

@@ -75,7 +75,9 @@ export class WorkflowRunner {
     }
 
     if (this.deps.dryRun) return { dry_run: true, planned_requests: this.planned };
-    return workflow.result ? getPath({ steps }, workflow.result) : steps;
+    // `result` names a step (e.g. "createListing") or a dotted path into one
+    // ("createListing.slug"); resolve it against the steps map directly.
+    return workflow.result ? getPath(steps, workflow.result) : steps;
   }
 
   // -- step execution --------------------------------------------------------
@@ -88,8 +90,17 @@ export class WorkflowRunner {
     if (step.foreach) {
       const items = asArray(renderTemplate(step.foreach, ctx(), { strict: false }));
       const results: unknown[] = [];
-      for (const item of items) {
-        const itemCtx = (): TemplateContext => ({ ...ctx(), item });
+      for (let index = 0; index < items.length; index++) {
+        const item = items[index];
+        // Bind the current element to `${item}`, its position to `${index}`
+        // (so a parallel list can be paired by index — e.g. photos ↔ slots),
+        // and, when `as` is set, to that alias too (as documented on the step).
+        const itemCtx = (): TemplateContext => ({
+          ...ctx(),
+          item,
+          index,
+          ...(step.as ? { [step.as]: item } : {}),
+        });
         results.push(await this.executeOnce(step, itemCtx));
       }
       return results;
@@ -99,6 +110,15 @@ export class WorkflowRunner {
 
   /** One request (with optional poll loop) and its output extraction. */
   private async executeOnce(step: WorkflowStep, ctx: () => TemplateContext): Promise<unknown> {
+    // A step with no operationId is a pure transform: it makes no HTTP call and
+    // just shapes its `value` (templated) through `output` (path/extract/coerce).
+    // Used to derive one step's data from another (e.g. picture ids from slot
+    // URLs) without an extra round-trip.
+    if (!step.operationId) {
+      const raw = step.value !== undefined ? renderTemplate(step.value, ctx(), { strict: false }) : ctx().item;
+      return this.applyOutput(step, raw);
+    }
+
     const op = this.deps.spec.byOperationId(step.operationId);
     if (!op) throw new WorkflowError(step.id, `unknown operationId "${step.operationId}"`);
 
@@ -106,13 +126,14 @@ export class WorkflowRunner {
     const delay = step.poll?.delay_ms ?? 1000;
 
     for (let attempt = 0; attempt < attempts; attempt++) {
-      const result = await this.sendRequest(step, op, ctx);
+      const raw = await this.sendRequest(step, op, ctx);
 
-      if (!step.poll || this.deps.dryRun) return result;
+      if (!step.poll || this.deps.dryRun) return this.applyOutput(step, raw);
 
-      // Poll: store provisionally so `until` can reference this step's result.
-      const probe: TemplateContext = { ...ctx(), steps: { ...(ctx().steps as object), [step.id]: result } };
-      if (truthy(renderTemplate(step.poll.until, probe, { strict: false }))) return result;
+      // Poll: store the RAW response provisionally so `until` can reference any
+      // field of this step's response (not just its extracted output).
+      const probe: TemplateContext = { ...ctx(), steps: { ...(ctx().steps as object), [step.id]: raw } };
+      if (truthy(renderTemplate(step.poll.until, probe, { strict: false }))) return this.applyOutput(step, raw);
       await sleep(delay);
     }
     throw new WorkflowError(step.id, `polling did not complete after ${attempts} attempts`);
@@ -141,18 +162,26 @@ export class WorkflowRunner {
     if (this.deps.dryRun) {
       this.planned.push({ step: step.id, method, url, headers: redactAuth(headers), body: previewBody(body) });
       // A placeholder keeps downstream templating from crashing on missing refs.
-      return this.applyOutput(step, { dryRun: true });
+      return { dryRun: true };
     }
 
     const transport = req.transport === "direct" || req.no_auth ? this.direct : await this.deps.apiTransport();
     const res = await transport.send({ method, url, headers, body });
     const text = await res.text();
     if (res.status < 200 || res.status >= 300) {
-      throw new WorkflowError(step.id, `HTTP ${res.status}: ${text.slice(0, 200)}`);
+      if (process.env.MASTRO_DEBUG_STEPS) {
+        console.error(`[mastro-debug] step "${step.id}" ERROR ${res.status} body:`, text.slice(0, 1500));
+      }
+      throw new WorkflowError(step.id, `HTTP ${res.status}: ${text.slice(0, 500)}`);
     }
 
     const data = parseMaybeJson(text);
-    return this.applyOutput(step, data);
+    if (process.env.MASTRO_DEBUG_STEPS) {
+      console.error(`[mastro-debug] step "${step.id}" raw response:`, JSON.stringify(data).slice(0, 600));
+    }
+    // Return the RAW response; `output` extraction happens in executeOnce after
+    // any poll loop, so `poll.until` can reference the full response body.
+    return data;
   }
 
   /**
@@ -191,6 +220,10 @@ export class WorkflowRunner {
     if (out.extract && typeof value === "string") {
       const m = value.match(new RegExp(out.extract));
       if (m) value = m[1] ?? m[0];
+    }
+    if (out.coerce === "number" && typeof value === "string" && value.trim() !== "") {
+      const n = Number(value);
+      if (!Number.isNaN(n)) value = n;
     }
     return value;
   }

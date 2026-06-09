@@ -231,6 +231,13 @@ paths:
         - { name: variant-set, description: "size set id (derived from department/type)",
             x-mastro-resolve: { from: "file:reference/categories.json", keyed: true, value_path: size_set_us,
                                 key_template: "${args.department}/${args.type}" } }
+        # Variant member id within the size set — the second half of the size
+        # mapping (variant-set is the set; this is the member within it). Keyed
+        # by "<size_set>/<size>" so it resolves only after variant-set above.
+        # Empty when no --size (one-size items) → variants stays {}.
+        - { name: variant, description: "size variant id (derived from size set + size)",
+            x-mastro-resolve: { from: "file:reference/size_variants.json", keyed: true,
+                                key_template: "${args.variant-set}/${args.size}" } }
         - { name: address-id, description: "ship-from address id", required: true }
         - { name: address, description: 'e.g. "San Francisco, United States"', required: true }
         - { name: lat, description: "geo latitude", required: true }
@@ -244,48 +251,78 @@ paths:
         result: createListing
         steps:
           # 1. Request an upload slot per photo (returns a presigned S3 URL).
+          #    The /api/* picture endpoints live on the webapi host, NOT www
+          #    (www serves the Next.js app and 404s these paths) — so override
+          #    the URL explicitly. The /presentation/* paths (search, listing)
+          #    stay on the www base URL.
           - id: slots
             operationId: uploadPicture
             foreach: "${args.photo}"
             as: photo
             request:
+              url: "https://webapi.depop.com/api/v4/pictures/"
               body: { type: product, extension: jpg, dimensions: { width: 1280, height: 1280 } }
             output: { path: url }
 
           # 2. PUT the bytes to S3 (presigned → no auth, direct transport).
+          #    Iterate over the photos so ${item} is each photo path, and pair
+          #    it with its slot URL positionally via ${steps.slots.${index}}.
           - id: uploads
             operationId: s3Put
-            foreach: "${steps.slots}"
-            as: slotUrl
+            foreach: "${args.photo}"
+            as: photo
             request:
-              url: "${item}"
+              url: "${steps.slots.${index}}"
               no_auth: true
               headers: { content-type: image/jpeg }
-              # NOTE: foreach over slot URLs; the matching photo is by index — for
-              # the dry-run preview we reference the first photo. Live upload pairs
-              # them positionally in the runner.
-              body: "${file:args.photo}"
+              body: "${file:item}"
 
-          # 3. Validate + poll until processed.
+          # 3. Derive the numeric picture id from each slot URL. The id is the
+          #    digits before "_<sid>/P0.jpg" in the presigned S3 URL, e.g.
+          #    .../3928044106_9da0d44.../P0.jpg → 3928044106. validate wants
+          #    these as JSON numbers, so coerce. (Pure transform: no HTTP call.)
+          - id: pictureIds
+            foreach: "${steps.slots}"
+            value: "${item}"
+            output: { extract: "/(\\d+)_[a-f0-9]+/P0\\.jpg", coerce: number }
+
+          # 4. Validate the uploaded pictures (fire once). On the webapi host.
           - id: validate
             operationId: validatePictures
             request:
-              body: { picture_ids: "${steps.slots}" }
+              url: "https://webapi.depop.com/internal/v1/pictures/validate/"
+              body: { picture_ids: "${steps.pictureIds}" }
 
-          # 4. Create the listing.
+          # 5. Poll the batch endpoint until every picture has finished
+          #    processing (each id maps to an object with a populated `url`).
+          #    The {ids} path param is the comma-joined id list. webapi host.
+          - id: pollPictures
+            operationId: pictureBatch
+            request:
+              url: "https://webapi.depop.com/api/v1/pictures/batch/${steps.pictureIds}/"
+            poll:
+              until: "${steps.pollPictures.${steps.pictureIds.0}.url}"
+              attempts: 20
+              delay_ms: 1500
+
+          # 6. Create the listing — picture_ids carries the processed ids.
           - id: createListing
             operationId: createListing
             request:
+              url: "https://webapi.depop.com/presentation/api/v1/listing/products/"
               body:
                 brand: "${args.brand}"
                 colour: "${args.colour}"
                 condition: "${args.condition}"
                 description: "${args.description}"
                 gender: "${args.gender}"
+                is_kids: false
                 country: US
                 address: "${args.address}"
-                geo_position_lat: "${args.lat}"
-                geo_position_lng: "${args.lng}"
+                # Depop wants numeric lat/lng, address id, and variant_set — cast
+                # them so they serialize as JSON numbers, not strings.
+                geo_position_lat: "${num:args.lat}"
+                geo_position_lng: "${num:args.lng}"
                 price_amount: "${args.price}"
                 price_currency: "${args.currency|USD}"
                 product_type: "${args.type}"
@@ -294,14 +331,22 @@ paths:
                   - payer: buyer
                     parcel_size: "${args.parcel-size|medium}"
                     shipping_provider_id: USPS
-                    ship_from_address_id: "${args.address-id}"
+                    ship_from_address_id: "${num:args.address-id}"
                 attributes: {}
-                age: "${args.age}"
-                style: "${args.style}"
-                source: "${args.source}"
+                age: "${args.age|[]}"
+                style: "${args.style|[]}"
+                source: "${args.source|[]}"
                 boost: { status: active }
-                variant_set: "${args.variant-set}"
-                quantity: 1
+                variant_set: "${num:args.variant-set}"
+                # Size mapping: variants is { <member-id>: quantity }. The runner
+                # drops object entries whose key resolves empty, so a one-size
+                # item (no --size → empty variant) yields variants: {}. When a
+                # variant is present Depop wants quantity: null (the variant map
+                # holds the count); the empty-string key below renders to null.
+                variants:
+                  "${args.variant}": 1
+                quantity: null
+                picture_ids: "${steps.pictureIds}"
                 listing_lifecycle_id: "${uuid}"
                 persistent_id: "${uuid}"
       responses:
