@@ -18,12 +18,14 @@ import type {
   MastroWorkflow,
   OpenApiSpec,
   OperationView,
+  WorkflowFormReplay,
   WorkflowStep,
 } from "@mastro/core";
 
+import { encodeForm, parseFormFields } from "./form.ts";
 import { renderDeep, renderTemplate, renderTemplateString, type TemplateContext } from "./template.ts";
 import { FetchTransport, type Transport } from "./transport.ts";
-import { getPath, parseMaybeJson, sleep } from "./util.ts";
+import { getPath, metaRefreshUrl, parseMaybeJson, sleep } from "./util.ts";
 
 export class WorkflowError extends Error {
   constructor(public readonly step: string, message: string) {
@@ -170,7 +172,9 @@ export class WorkflowRunner {
       for (const [k, v] of Object.entries(req.headers)) headers[k] = renderTemplateString(v, c, this.opts());
     }
 
-    const body = this.buildBody(req.body, headers, c);
+    const body = req.form
+      ? await this.buildFormBody(step, req.form, headers, c)
+      : this.buildBody(req.body, headers, c);
 
     if (this.deps.dryRun) {
       this.planned.push({ step: step.id, method, url, headers: redactAuth(headers), body: previewBody(body) });
@@ -181,8 +185,22 @@ export class WorkflowRunner {
     }
 
     const transport = req.transport === "direct" || req.no_auth ? this.direct : await this.deps.apiTransport();
-    const res = await transport.send({ method, url, headers, body });
-    const text = await res.text();
+    let res = await transport.send({ method, url, headers, body });
+    let text = await res.text();
+
+    // Follow an Akamai-style meta-refresh bot wall, same as a single call()
+    // (see connector.request) — a workflow GET can hit the stub interstitial
+    // too. GET, same headers, at most two hops.
+    if (this.deps.spec.replay().follow_html_refresh) {
+      for (let hop = 0; hop < 2; hop++) {
+        const target = metaRefreshUrl(text);
+        if (!target) break;
+        const next = new URL(target, url).toString();
+        res = await transport.send({ method: "GET", url: next, headers });
+        text = await res.text();
+      }
+    }
+
     if (res.status < 200 || res.status >= 300) {
       if (process.env.MASTRO_DEBUG_STEPS) {
         console.error(`[mastro-debug] step "${step.id}" ERROR ${res.status} body:`, text.slice(0, 1500));
@@ -227,6 +245,38 @@ export class WorkflowRunner {
     const rendered = renderDeep(bodyTemplate, ctx, this.opts());
     if (!headers["content-type"]) headers["content-type"] = "application/json";
     return JSON.stringify(rendered);
+  }
+
+  /**
+   * Build an application/x-www-form-urlencoded body by replaying a server-
+   * rendered <form> from a prior step's HTML (x-mastro-form). Captures the
+   * form's CSRF token and hidden fields verbatim, then applies the templated
+   * `set`/`unset` overrides (the clicked button, a JS-set flag). Under dry-run
+   * the HTML is a step stub, so there's no real form to parse — emit a
+   * placeholder body instead of failing.
+   */
+  private async buildFormBody(
+    step: WorkflowStep,
+    form: WorkflowFormReplay,
+    headers: Record<string, string>,
+    ctx: TemplateContext,
+  ): Promise<string> {
+    headers["content-type"] ??= "application/x-www-form-urlencoded";
+
+    const set: Record<string, string> = {};
+    for (const [k, v] of Object.entries(form.set ?? {})) set[k] = renderTemplateString(v, ctx, this.opts());
+
+    if (this.deps.dryRun) {
+      // `${steps.*}` is a stub in dry-run; the real form fields are unknown.
+      return encodeForm([{ name: "<form-fields>", value: "<from " + (form.selector ?? "form") + ">" }], set, form.unset);
+    }
+
+    const html = renderTemplateString(form.html, ctx, { strict: false });
+    const fields = await parseFormFields(html, form.selector);
+    if (!fields) {
+      throw new WorkflowError(step.id, `x-mastro-form: no form matched "${form.selector ?? "form"}"`);
+    }
+    return encodeForm(fields, set, form.unset);
   }
 
   /** Extract this step's stored result per its `output` config. */

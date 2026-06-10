@@ -29,12 +29,13 @@ import {
 
 import { BrowserTransport } from "./browser-transport.ts";
 import { JsonCache } from "./cache.ts";
+import { extractItems } from "./extract.ts";
 import { Resolver, type MetadataFetcher } from "./resolver.ts";
 import { WorkflowRunner } from "./workflow.ts";
 import { renderDeep, renderStringMap, renderTemplate, type TemplateContext } from "./template.ts";
 import { selectTransport, type HttpResponse, type Transport } from "./transport.ts";
 import { throttled } from "./throttle.ts";
-import { getPath, parseMaybeJson, sleep } from "./util.ts";
+import { getPath, metaRefreshUrl, parseMaybeJson, sleep } from "./util.ts";
 
 export class NotAuthenticatedError extends Error {
   constructor(public readonly providerId: string, message?: string) {
@@ -229,15 +230,45 @@ export class Connector {
     const body = this.buildBody(op, args);
 
     const transport = await this.getTransport();
-    const res = await this.sendWithRetry(transport, { method: op.method.toUpperCase(), url, headers, body });
+    const { status, text } = await this.request(transport, {
+      method: op.method.toUpperCase(),
+      url,
+      headers,
+      body,
+    });
+    this.checkStatus(status, text);
 
-    const text = await res.text();
-    this.checkStatus(res.status, text);
-
-    const data = parseMaybeJson(text);
+    // An HTML-only operation declares x-mastro-extract: the structured items
+    // become the data (nobody wants the raw page back).
+    const extract = op.operation["x-mastro-extract"];
+    const data = extract ? await extractItems(text, extract) : parseMaybeJson(text);
     const resultPath = op.operation["x-mastro-result"];
     const result = resultPath ? getPath(data, resultPath) : data;
-    return { status: res.status, data, result };
+    return { status, data, result };
+  }
+
+  /**
+   * Send a request and read its body, following an HTML meta-refresh
+   * interstitial when the spec opts in (Akamai-style bot walls answer with a
+   * stub page that refreshes to the same URL plus a one-time token).
+   */
+  private async request(
+    transport: Transport,
+    req: Parameters<Transport["send"]>[0],
+  ): Promise<{ status: number; text: string }> {
+    let res = await this.sendWithRetry(transport, req);
+    let text = await res.text();
+
+    if (this.spec.replay().follow_html_refresh) {
+      for (let hop = 0; hop < 2; hop++) {
+        const target = metaRefreshUrl(text);
+        if (!target) break;
+        const url = new URL(target, req.url).toString();
+        res = await this.sendWithRetry(transport, { method: "GET", url, headers: req.headers });
+        text = await res.text();
+      }
+    }
+    return { status: res.status, text };
   }
 
   // -- request construction --------------------------------------------------
@@ -330,16 +361,15 @@ export class Connector {
     if (!op) throw new Error(`x-mastro-resolve references unknown operation "${operationId}"`);
     const url = await this.buildUrl(op, {});
     const transport = await this.getTransport();
-    const res = await transport.send({
+    const { status, text } = await this.request(transport, {
       method: op.method.toUpperCase(),
       url,
       headers: this.buildHeaders(op),
     });
-    const text = await res.text();
     // Apply the same status mapping as a normal call, so a 401 mid-resolution
     // surfaces as an actionable RecaptureRequiredError instead of being parsed
     // as if it were a taxonomy body.
-    this.checkStatus(res.status, text);
+    this.checkStatus(status, text);
     return parseMaybeJson(text);
   }
 
