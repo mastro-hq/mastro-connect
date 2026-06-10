@@ -7,7 +7,7 @@ providers/<id>/
   auth.manifest.json            # what the extension captures in the browser
   openapi.yaml | openapi.json   # the API surface (OpenAPI 3.1 + x-mastro-*)
   README.md                     # how it works, how it was reverse-engineered
-  skills/                       # optional agent-facing playbooks
+  skills/<skill>/SKILL.md       # agent-facing playbooks (installable)
 ```
 
 Validate as you go:
@@ -139,9 +139,30 @@ paths:
 symptoms + recapture steps**. Note any external binary needed (e.g.
 `curl-impersonate`).
 
-`skills/<command>.md`: agent-facing playbook — when to use it, preconditions
-(logged in?), the exact command with `--json`, how to read the result, what to
-do on an auth error.
+`skills/<skill>/SKILL.md`: agent-facing playbook — when to use it,
+preconditions (logged in?), the exact command with `--json`, how to read the
+result, what to do on an auth error. Users install these into their agent's
+skills folder with `mastro skills add <id>[/<skill>]`.
+
+Format: a directory per skill containing `SKILL.md` with **single-line** YAML
+frontmatter:
+
+```markdown
+---
+name: mastro-<id>-<skill>
+description: One sentence on what it does, then when an agent should reach for it (trigger phrases help).
+---
+
+# Title
+…body: preconditions, the command, reading results, tips…
+```
+
+`name` is the directory name the skill installs under — prefix it
+`mastro-<id>-` so it can't collide in a user's skills folder. Defer flag lists
+to `--help` (they're generated from the spec and would drift here); document
+the durable shape instead: auth precondition, `--json`, result fields, rate
+limit, drift symptoms. Extra reference files can sit next to SKILL.md — the
+whole directory is copied on install.
 
 ---
 

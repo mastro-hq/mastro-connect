@@ -4,7 +4,9 @@
  *   mastro login <provider>      capture a browser session
  *   mastro logout <provider>     forget a stored session
  *   mastro status                show logged-in connectors
- *   mastro providers             list available connectors
+ *   mastro providers [...]       list / fetch / refresh connectors
+ *   mastro skills [...]          install agent skills for connectors
+ *   mastro extension [...]       install the browser extension
  *   mastro <provider> <command>  call a connector's unofficial API
  *
  * Built-in verbs are handled directly; anything else is treated as a provider
@@ -15,10 +17,11 @@ import { login } from "./commands/login.ts";
 import { logout } from "./commands/logout.ts";
 import { status } from "./commands/status.ts";
 import { providers } from "./commands/providers.ts";
+import { skills } from "./commands/skills.ts";
+import { extension } from "./commands/extension.ts";
 import { runConnector } from "./commands/connector.ts";
 import { jsonMode, ui } from "./output.ts";
-
-const VERSION = "0.1.0";
+import { VERSION } from "./version.ts";
 
 export async function run(argv: string[]): Promise<number> {
   const asJson = jsonMode(argv);
@@ -44,7 +47,11 @@ export async function run(argv: string[]): Promise<number> {
     case "status":
       return status(ctx, asJson);
     case "providers":
-      return providers(ctx, asJson);
+      return providers(ctx, rest, asJson);
+    case "skills":
+      return skills(ctx, rest, asJson);
+    case "extension":
+      return extension(ctx, rest, asJson);
     default:
       // Treat `command` as a provider id: `mastro depop search ...`
       return runConnector(ctx, command, rest, asJson);
@@ -87,6 +94,9 @@ Usage:
   mastro logout <provider>       Forget a stored session
   mastro status                  Show logged-in connectors
   mastro providers               List available connectors
+  mastro providers add <id>      Fetch a connector's latest definition from GitHub
+  mastro skills add <id>         Install a connector's agent skills (.claude/skills)
+  mastro extension install       Install the browser extension (needed for login)
   mastro <provider> <command>    Call a connector's unofficial API
   mastro <provider> --help       Show a connector's commands
 
@@ -97,5 +107,5 @@ Global flags:
 Examples:
   mastro login depop
   mastro depop search "carhartt jacket" --conditions used_good --sizes M
-  mastro depop search "vintage tee" --json`);
+  mastro skills add depop --global`);
 }

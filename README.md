@@ -9,7 +9,7 @@ mastro login depop
 mastro depop search "carhartt jacket" --conditions used_good --sizes M --json
 ```
 
-[Concept](#the-idea) · [Quickstart](#quickstart) · [How it works](#how-it-works) · [Add a connector](#adding-a-connector) · [Docs](#documentation) · [Ethics](#ethics--scope)
+[Concept](#the-idea) · [Quickstart](#quickstart) · [How it works](#how-it-works) · [Agent skills](#agent-skills) · [Add a connector](#adding-a-connector) · [Docs](#documentation) · [Ethics](#ethics--scope)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
 ![Bun](https://img.shields.io/badge/runtime-Bun-black)
@@ -55,25 +55,30 @@ mastro depop me
 
 ### Prerequisites
 
-- [Bun](https://bun.sh) ≥ 1.1
+- [Bun](https://bun.sh) ≥ 1.1 (the runtime; the launcher tells you if it's missing)
 - Google Chrome (for the capture extension)
 
 ### 1. Install
 
 ```bash
-git clone <your-fork-url> mastro-connect
-cd mastro-connect
-bun install
-bun link            # puts `mastro` on your PATH
+npm install -g mastro-connect    # puts `mastro` on your PATH
 mastro --help
 ```
 
+Or zero-install: prefix every command with `npx -y mastro-connect` instead of
+`mastro`. Working on mastro itself? Clone the repo, `bun install`, and use
+`bun run mastro …`.
+
 ### 2. Load the capture extension (one time)
 
-1. Open `chrome://extensions`
-2. Enable **Developer mode** (top-right)
-3. **Load unpacked** → select the [`extension/`](extension) folder
-4. Pin **mastro · connect** — click its icon any time to see capture status
+```bash
+mastro extension install
+```
+
+This copies the bundled extension to `~/.mastro/extension` and walks you
+through `chrome://extensions` → **Developer mode** → **Load unpacked**. Pin
+**mastro · connect** — click its icon any time to see capture status. (From a
+repo checkout you can load the [`extension/`](extension) folder directly.)
 
 ### 3. Log in to a connector
 
@@ -223,6 +228,45 @@ anything. → [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md)
 
 ---
 
+## Agent skills
+
+Every connector ships **agent skills** — `SKILL.md` playbooks that teach an AI
+agent when and how to drive it (preconditions, `--json` shapes, rate limits,
+safety rules like "dry-run before spending money"). They live inside the
+provider definition (`providers/<id>/skills/<skill>/SKILL.md`), so a fix to a
+drifting API and the playbook that documents it travel in the same PR.
+
+```bash
+mastro skills list                   # what's available
+mastro skills add depop              # install into ./.claude/skills (project)
+mastro skills add amazon/search --global    # ~/.claude/skills (everywhere)
+mastro skills add depop --dir .agents/skills
+mastro skills update                 # refresh everything installed here
+```
+
+Every install also drops the root `mastro` skill — the session-model
+conventions (login, `status --json`, exit codes) every provider skill builds
+on. Installed skills carry a `.mastro.json` provenance stamp so `update` knows
+what it owns.
+
+Because skills are standard-format `SKILL.md` directories in a public GitHub
+repo, generic skill installers (e.g. `npx skills add`) can fetch them too —
+`mastro skills add` is just the convenience path that already knows your
+installed providers.
+
+When a site changes faster than the npm package, pull a connector's latest
+definition (spec + skills) straight from GitHub:
+
+```bash
+mastro providers add depop     # → ~/.mastro/providers/depop (pinned to a commit)
+mastro providers update        # re-fetch everything you've added
+```
+
+User-fetched providers shadow the bundled ones, so a fix lands without waiting
+for a release.
+
+---
+
 ## Adding a connector
 
 A connector is a folder under `providers/` with two files (plus docs). **No code.**
@@ -233,7 +277,7 @@ providers/<name>/
   openapi.yaml         # the API surface — OpenAPI 3.1 + x-mastro-* extensions
   README.md            # how it works, how it was reverse-engineered, drift notes
   reference/           # optional bundled lookup data (taxonomies)
-  skills/              # optional per-command playbooks for agents
+  skills/<skill>/      # agent skills: SKILL.md (frontmatter: name, description)
 ```
 
 The short version:
@@ -265,12 +309,17 @@ mastro-connect/
 │   └── cli/         @mastro/cli — the `mastro` binary
 ├── extension/       generic MV3 capture + browser-proxy runtime (plain JS, type-checked)
 ├── providers/
-│   └── depop/       first connector (search, me, list)
+│   ├── depop/       first connector (search, me, list) + skills
+│   └── amazon/      search, detail, Buy Now order + skills
+├── skills/
+│   └── mastro/      the root agent skill (session model, conventions)
+├── bin/             node launcher shim for npx/global installs
 └── docs/            AUTHORING · BROWSER-PROXY · WORKFLOWS
 ```
 
-Bun + TypeScript throughout (strict; the extension JS is `checkJs`-verified). The
-whole thing runs on Bun directly — no build step.
+Bun + TypeScript throughout (strict; the extension JS is `checkJs`-verified).
+From a checkout everything runs on Bun directly — the only build step is
+`bun run build`, which bundles the CLI into `dist/` for the npm package.
 
 ```bash
 bun test            # run the test suite
