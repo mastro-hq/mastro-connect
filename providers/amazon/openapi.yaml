@@ -1,0 +1,288 @@
+openapi: 3.1.0
+info:
+  title: Amazon retail web (unofficial)
+  version: reverse-engineered-2026-06-09
+  description: >
+    Reverse-engineered from amazon.com browser traffic (see README).
+    Operational, not a stable contract. Amazon's retail pages have NO JSON
+    API — search results and product details exist only server-rendered (the
+    site's own ajax refinement endpoint, POST /s/query, returns &&&-delimited
+    chunks of HTML fragments) — so search and detail declare x-mastro-extract
+    to turn the page into structured data. The order command is an
+    x-mastro-workflow that drives the real Buy Now pipeline (detail form →
+    /checkout/entry/buynow → place-order), defaulting everything (default
+    address, default payment, quantity 1) exactly as clicking "Buy Now" does.
+
+servers:
+  - url: https://www.amazon.com
+
+# --- replay choreography (mastro extension) --------------------------------
+# Amazon fingerprints non-browser clients and answers them with a 503 robot
+# check, so requests run through the extension's logged-in amazon.com tab.
+# 503 is also what a throttle looks like, hence the retry. Even in-tab
+# fetches get flagged by Akamai Bot Manager: the response is then a stub page
+# that meta-refreshes to the same URL plus a one-time bm-verify token —
+# follow_html_refresh chases it to the real page.
+x-mastro-replay:
+  via_browser: true
+  follow_html_refresh: true
+  retry_on: [503]
+  rate_limit:
+    requests_per_minute: 12
+
+# --- how a captured session becomes a live request -------------------------
+# No bearer token anywhere: amazon auth is the cookie jar itself (at-main is
+# the HttpOnly auth token, session-id/ubid-main identify the session). No
+# verify op: search answers 200 even logged-out, so there is no cheap "is the
+# session live" signal to probe.
+x-mastro-auth:
+  required_fields: [cookie_header]
+  headers:
+    cookie: "${auth.cookie_header}"
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: at-main
+
+security:
+  - cookieAuth: []
+
+paths:
+  # =========================================================================
+  # Search products — the only command for now
+  # =========================================================================
+  /s:
+    get:
+      operationId: search
+      x-mastro-command: search
+      summary: Search Amazon products.
+      description: >
+        Page-paginated product search, the same URL the site's search box
+        drives. Each result is extracted from the server-rendered page: asin,
+        title, price (current offer), rating, reviews count, image, url
+        (product or sponsored-click path, relative to amazon.com), and
+        sponsored ("Sponsored" label text, null for organic results).
+      x-mastro-extract:
+        items: 'div[data-component-type="s-search-result"]'
+        fields:
+          asin: { attr: data-asin }
+          title: { selector: "h2 span" }
+          price: { selector: ".a-price .a-offscreen" }
+          rating: { selector: 'i[class*="a-icon-star"] .a-icon-alt' }
+          reviews: { selector: 'span[class*="s-underline-text"]' }
+          image: { selector: "img.s-image", attr: src }
+          url: { selector: "a.a-link-normal", attr: href }
+          sponsored: { selector: ".puis-sponsored-label-text .puis-label-popover-default" }
+      parameters:
+        - name: k
+          in: query
+          required: true
+          description: Search text, e.g. "laptop stand".
+          schema: { type: string }
+
+        - name: i
+          in: query
+          description: Department search alias, e.g. electronics / fashion / garden.
+          schema: { type: string }
+
+        - name: page
+          in: query
+          description: Result page, 1-based (~22 organic+sponsored items per page).
+          schema: { type: integer, minimum: 1 }
+
+        - name: s
+          in: query
+          description: Sort order (default relevance).
+          schema:
+            type: string
+            enum:
+              [
+                relevanceblender,
+                price-asc-rank,
+                price-desc-rank,
+                review-rank,
+                date-desc-rank,
+                exact-aware-popularity-rank,
+              ]
+
+        - name: low-price
+          in: query
+          description: Minimum price (in the storefront currency).
+          schema: { type: number, minimum: 0 }
+
+        - name: high-price
+          in: query
+          description: Maximum price (in the storefront currency).
+          schema: { type: number, minimum: 0 }
+
+        - name: rh
+          in: query
+          description: >
+            Raw refinement string, exactly as it appears in the site's filter
+            URLs (e.g. "p_123:308445" for a brand, "p_n_free_shipping_eligible:..."),
+            comma-separated to combine. Advanced escape hatch — the filter ids
+            are not enumerable without scraping the filter bar.
+          schema: { type: string }
+      responses:
+        "200":
+          description: A page of matching products (HTML; items extracted).
+          content:
+            text/html: {}
+        "503":
+          description: Robot check / throttle. Retried via the browser tab.
+
+  # =========================================================================
+  # Product detail — single product, by ASIN
+  # =========================================================================
+  /dp/{asin}:
+    get:
+      operationId: detail
+      x-mastro-command: detail
+      summary: Get one product's detail by ASIN.
+      description: >
+        Fetches the product page and extracts a single object: title, price
+        (the current buy-box offer), rating, reviews count, availability,
+        seller/merchant, byline (brand/store), and the main image. The ASIN is
+        the 10-char id shown in search results and in /dp/<asin> URLs. Detail
+        has no JSON endpoint either, so it declares x-mastro-extract in
+        single-object mode (no `items` selector → the whole page is one item).
+      x-mastro-extract:
+        # No `items`: single-object mode — selectors are document-scoped and the
+        # result is one flat object, not an array.
+        fields:
+          asin: { selector: "input#ASIN", attr: value }
+          title: { selector: "#productTitle" }
+          byline: { selector: "#bylineInfo" }
+          price: { selector: "#corePrice_feature_div .a-offscreen" }
+          rating: { selector: "#acrPopover .a-icon-alt" }
+          reviews: { selector: "#acrCustomerReviewText" }
+          availability: { selector: "#availability span" }
+          merchant: { selector: "#merchant-info" }
+          image: { selector: "#landingImage", attr: src }
+      parameters:
+        - name: asin
+          in: path
+          required: true
+          description: 10-character product id (e.g. B00X4SCCFG).
+          schema: { type: string }
+      responses:
+        "200":
+          description: The product page (HTML; one object extracted).
+          content:
+            text/html: {}
+        "404":
+          description: No such product.
+
+  # =========================================================================
+  # Order a product — Buy Now with all defaults (x-mastro-workflow)
+  # =========================================================================
+  # The order command drives the real Buy Now pipeline. The three steps below
+  # are the endpoints it calls; they're x-mastro-hidden (building blocks, not
+  # standalone commands). Each gates the next behind a server-rendered form
+  # carrying a one-time CSRF token, so the workflow uses x-mastro-form to
+  # replay those forms verbatim (see README "How ordering works").
+  /dp/{asin}#page:
+    get:
+      operationId: detailPage
+      x-mastro-hidden: true
+      summary: The raw product page (carries the Buy Now form).
+      description: >
+        Same URL as `detail` but consumed as raw HTML by the order workflow —
+        the page embeds the #addToCart form (CSRF token, offer id, hidden
+        fields) that Buy Now submits. (A separate operation from `detail` only
+        so the latter can keep its x-mastro-extract; the workflow wants the
+        bytes, not the extracted object.)
+      responses:
+        "200": { description: Product page HTML. }
+
+  /checkout/entry/buynow:
+    post:
+      operationId: buynow
+      x-mastro-hidden: true
+      summary: Start single-page checkout from the Buy Now form.
+      description: >
+        Submits the #addToCart form with the Buy Now button. Returns the SPC
+        (single-page checkout) review page, which embeds the place-order form
+        and a fresh CSRF token. Defaults everything — address, payment, gift
+        options — exactly as clicking "Buy Now" does.
+      responses:
+        "200": { description: SPC review page HTML. }
+
+  /checkout/p/{purchaseId}/spc/place-order:
+    post:
+      operationId: placeOrder
+      x-mastro-hidden: true
+      summary: Place the order (the irreversible step — spends money).
+      description: >
+        Submits the SPC place-order form. Responds 302 to the thank-you page
+        (followed by the transport). After this the order exists and is
+        charged.
+      responses:
+        "200": { description: Thank-you page HTML (after the 302). }
+
+  /x-mastro/order:
+    post:
+      operationId: order
+      x-mastro-command: order
+      summary: Buy a product now with all defaults. SPENDS REAL MONEY.
+      description: >
+        Places a real order via Buy Now: the account's default shipping
+        address, default payment method, and quantity 1 — exactly what clicking
+        "Buy Now" then "Place your order" does. THIS CHARGES YOUR CARD. Always
+        --dry-run first to preview every request without ordering. Identify the
+        product by ASIN (from search or detail). Returns the Amazon order id on
+        success.
+      x-mastro-args:
+        - { name: asin, description: "10-char product id to buy (e.g. B00X4SCCFG)", required: true }
+      x-mastro-workflow:
+        result: confirmation
+        steps:
+          # 1. Load the product page as raw HTML — it carries the Buy Now form
+          #    (#addToCart) with its CSRF token, offer id, and hidden fields.
+          #    The workflow doesn't run x-mastro-extract, so this is the bytes.
+          - id: detailPage
+            operationId: detailPage
+            request:
+              url: "https://www.amazon.com/dp/${args.asin}"
+
+          # 2. Submit Buy Now: replay the #addToCart form verbatim (FormData
+          #    semantics) and add the clicked button (submit.buy-now), exactly
+          #    as the browser does. The response is the SPC review page with the
+          #    place-order form and a fresh CSRF token.
+          - id: buynow
+            operationId: buynow
+            request:
+              url: "https://www.amazon.com/checkout/entry/buynow?pipelineType=Chewbacca&clientId=retailwebsite&temporaryAddToCart=1"
+              form:
+                html: "${steps.detailPage}"
+                selector: "#addToCart"
+                set: { "submit.buy-now": "" }
+
+          # 3. The purchase id (= the order id) is in the SPC page's place-order
+          #    action URL. Pure transform — no HTTP call.
+          - id: purchaseId
+            value: "${steps.buynow}"
+            output: { extract: "/checkout/p/(p-[\\w-]+)/spc" }
+
+          # 4. Place the order. Replay the SPC form — its one field is the fresh
+          #    anti-csrftoken-a2z — and add the submit markers the page's JS sets
+          #    on click. POST to the per-purchase place-order URL; the 302 to the
+          #    thank-you page is followed by the transport. IRREVERSIBLE.
+          - id: placeOrder
+            operationId: placeOrder
+            request:
+              url: "https://www.amazon.com/checkout/p/${steps.purchaseId}/spc/place-order?pipelineType=Chewbacca&isBuyNow=1&referrer=spc&ref_=chk_spc_chw_placeOrder"
+              form:
+                html: "${steps.buynow}"
+                selector: "form[name='spc']"
+                set: { placeYourOrder1: "1", hasWorkingJavascript: "1" }
+
+          # 5. Result = the bare order number (purchase id minus the "p-" prefix).
+          #    Reaching this step means place-order returned 2xx (a failed order
+          #    throws on a non-2xx response above).
+          - id: confirmation
+            value: "${steps.purchaseId}"
+            output: { extract: "p-(.+)" }

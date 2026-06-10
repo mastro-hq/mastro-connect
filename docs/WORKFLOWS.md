@@ -63,7 +63,19 @@ Each step calls an operation (`operationId`) and stores its result under
   against the step's **raw** response, so it can reference any response field
   even when `output` extracts only part of it.
 - **`request`** — per-step overrides: `url`, `method`, `body`, `headers`,
-  `no_auth` (skip auth, for presigned URLs), `transport` (`direct` | `browser`).
+  `no_auth` (skip auth, for presigned URLs), `transport` (`direct` | `browser`),
+  `form` (replay a server-rendered form as the body — see below).
+- **`request.form: { html, selector, set, unset }`** — build an
+  `application/x-www-form-urlencoded` body by replaying an HTML `<form>` from a
+  prior step's response. `html` is a template (usually `"${steps.<id>}"`),
+  `selector` picks the form (first match only — `querySelector` semantics, so
+  duplicate-id pages like Amazon's buy boxes work), `set` overrides/adds fields
+  (the clicked submit button, a JS-set flag), `unset` drops fields. The form is
+  serialized exactly as a browser would submit it (named non-button controls,
+  checked boxes only, selected option, textarea text), which captures a
+  server-rendered CSRF token and hidden fields verbatim. Use for state changes
+  gated behind a form (Amazon Buy Now → place-order). Mutually exclusive with
+  `body`.
 - **`output: { path, extract, coerce }`** — keep `response.<path>`; `extract`
   runs a regex and keeps the first capture group (e.g. pull a picture id from an
   S3 URL); `coerce: number` parses a numeric string into a JS number (so a later

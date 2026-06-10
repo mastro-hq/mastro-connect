@@ -23,6 +23,8 @@ export {
   MissingTemplateValue,
   type TemplateContext,
 } from "./template.ts";
+export { extractItems, type ExtractedItem } from "./extract.ts";
+export { parseFormFields, encodeForm, type FormField } from "./form.ts";
 export { Resolver, extractPath, type TaxonomyEntry, type MetadataFetcher } from "./resolver.ts";
 export { JsonCache } from "./cache.ts";
 export { TokenBucket, throttled } from "./throttle.ts";

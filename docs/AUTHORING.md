@@ -37,7 +37,9 @@ OpenAPI):
 | --- | --- |
 | `x-mastro-auth` (root) | How a captured credential becomes a live request: header/cookie templates, and **per-request generated values** (`${uuid}`, `${now}`). OpenAPI `securityScheme` only names the credential, never how to mint it. |
 | `x-mastro-resolve` (on a parameter) | **Dynamic enums**: valid values come from *another operation's response* (e.g. Depop's sizes/brands taxonomies), not a static list. JSON Schema `enum` is static literals only. |
-| `x-mastro-replay` (root) | Transport tuning OpenAPI doesn't model: browser impersonation (Cloudflare JA3), retry/recapture status codes, rate limit. |
+| `x-mastro-replay` (root) | Transport tuning OpenAPI doesn't model: browser impersonation (Cloudflare JA3), retry/recapture status codes, rate limit, following HTML meta-refresh bot walls (Akamai bm-verify → `follow_html_refresh`). |
+| `x-mastro-extract` (on an operation) | **HTML-only responses**: some sites have no JSON API at all (Amazon search/detail) — the data exists only server-rendered. An `items` CSS selector plus per-field selectors/attributes turn the page into an array of flat objects; omit `items` for **single-object mode** (a detail page → one object). Field selectors must not match nested elements within one item. |
+| `x-mastro-form` (on a workflow step's `request`) | **Form-gated state changes**: a POST guarded by a server-rendered `<form>` with a one-time CSRF token + many hidden fields (Amazon Buy Now → place-order). Point at the form in a prior step's HTML; it's serialized exactly as a browser would submit it (FormData semantics, first matching form only), with `set`/`unset` for the fields submission adds. |
 | `x-mastro-command` / `x-mastro-result` / `x-mastro-hidden` (on an operation) | CLI projection: the subcommand name, the response path to pretty-print, and hiding metadata-only endpoints. |
 
 > Don't invent human-friendly aliases. Flags and their allowed values are

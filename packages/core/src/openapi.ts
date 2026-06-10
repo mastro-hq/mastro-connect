@@ -18,6 +18,8 @@
  *                     operationId).
  *   x-mastro-result   dotted path to the "interesting" part of a response, for
  *                     pretty-printing.
+ *   x-mastro-extract  turn an HTML response into structured objects (CSS
+ *                     selectors → fields) for sites with no JSON API.
  *   x-mastro-hidden   omit this operation from the CLI (metadata-only endpoints).
  */
 
@@ -69,6 +71,14 @@ export interface Operation {
   "x-mastro-command"?: string;
   /** Dotted path into the response body for pretty-printing (e.g. "objects"). */
   "x-mastro-result"?: string;
+  /**
+   * Extract structured objects from an HTML response. For sites whose data
+   * only exists server-rendered (no JSON endpoint): the response body is
+   * parsed and each `items` match becomes one object, its fields read from
+   * selectors/attributes within it. The extracted array replaces the body as
+   * the operation's data (x-mastro-result then applies as usual).
+   */
+  "x-mastro-extract"?: MastroExtract;
   /** Hide this operation from the CLI (e.g. taxonomy-metadata endpoints). */
   "x-mastro-hidden"?: boolean;
   /**
@@ -132,12 +142,34 @@ export interface WorkflowRequest {
   method?: HttpMethod | Uppercase<HttpMethod>;
   /** Body (object template, deep-resolved) or a raw template string. */
   body?: unknown;
+  /**
+   * Build the body by replaying an HTML <form> from a prior step's response —
+   * for state changes gated behind a server-rendered form with a one-time CSRF
+   * token and many hidden fields (e.g. Amazon's Buy Now → place-order). The
+   * form is serialized exactly as a browser would submit it; `set`/`unset`
+   * override the few fields submission adds. Mutually exclusive with `body`.
+   */
+  form?: WorkflowFormReplay;
   /** Extra headers (templated). */
   headers?: Record<string, string>;
   /** Skip x-mastro-auth for this request (e.g. presigned S3 PUT). */
   no_auth?: boolean;
   /** Force a transport: "direct" (plain fetch) or "browser" (extension proxy). */
   transport?: "direct" | "browser";
+}
+
+export interface WorkflowFormReplay {
+  /** Template resolving to the HTML containing the form (e.g. "${steps.buynow}"). */
+  html: string;
+  /** CSS selector for the form. Defaults to the first <form>. */
+  selector?: string;
+  /**
+   * Field name → templated value. Overrides an existing field in place, or
+   * appends a new one (e.g. the clicked submit button, a JS-set flag).
+   */
+  set?: Record<string, string>;
+  /** Field names to drop from the submission. */
+  unset?: string[];
 }
 
 export interface WorkflowPoll {
@@ -261,6 +293,33 @@ export interface MastroAuth {
 }
 
 // ---------------------------------------------------------------------------
+// x-mastro-extract — structured objects out of an HTML response
+// ---------------------------------------------------------------------------
+
+export interface MastroExtract {
+  /**
+   * CSS selector matching one element per result item — array mode (search
+   * results). Omit for **single-object mode** (a product detail page): the
+   * whole document is one item, field selectors are document-scoped, and the
+   * operation's data is one flat object instead of an array.
+   */
+  items?: string;
+  /** Output field name → where to read it from, within (or on) each item. */
+  fields: Record<string, ExtractField>;
+}
+
+export interface ExtractField {
+  /**
+   * CSS selector *within* the item element (the runner scopes it by prefixing
+   * the `items` selector). Omit to read from the item element itself — only
+   * meaningful with `attr`. First match wins.
+   */
+  selector?: string;
+  /** Attribute name to read. Omit to take the element's text content. */
+  attr?: string;
+}
+
+// ---------------------------------------------------------------------------
 // x-mastro-resolve — dynamic enums sourced from another operation
 // ---------------------------------------------------------------------------
 
@@ -314,4 +373,11 @@ export interface MastroReplay {
   retry_on?: number[];
   recapture_on?: number[];
   rate_limit?: { requests_per_minute: number };
+  /**
+   * Follow an HTML meta-refresh interstitial (e.g. Akamai's bm-verify bot
+   * check: a flagged request gets a tiny page that meta-refreshes to the same
+   * URL plus a one-time token; the follow-up returns the real response). The
+   * follow-up is a GET with the same headers, at most 2 hops.
+   */
+  follow_html_refresh?: boolean;
 }
