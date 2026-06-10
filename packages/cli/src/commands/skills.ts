@@ -86,7 +86,7 @@ function list(ctx: CliContext, providerId: string | undefined, asJson: boolean):
 
   ui.heading("Available skills");
   for (const s of rows) {
-    console.error(`  ${pc.bold(s.source.padEnd(18))} ${pc.dim(truncate(s.description, 80))}`);
+    ui.print(`  ${pc.bold(s.source.padEnd(18))} ${pc.dim(truncate(s.description, 80))}`);
   }
   ui.info("\nInstall: mastro skills add <provider>[/<skill>]  [--global | --dir <path>]");
   return 0;
@@ -187,7 +187,7 @@ function truncate(text: string, max: number): string {
 }
 
 function printHelp(): void {
-  console.error(`mastro skills — install agent skills for connectors.
+  ui.print(`mastro skills — install agent skills for connectors.
 
 Usage:
   mastro skills list [provider]              List available skills

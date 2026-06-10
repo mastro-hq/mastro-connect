@@ -42,7 +42,7 @@ export function status(ctx: CliContext, asJson: boolean): number {
         : r.verified === false
           ? pc.red(" (verification failed)")
           : "";
-    console.error(`  ${badge}  ${pc.bold(r.provider)}${verified}`);
+    ui.print(`  ${badge}  ${pc.bold(r.provider)}${verified}`);
   }
   return 0;
 }

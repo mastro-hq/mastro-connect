@@ -46,8 +46,11 @@ mastro depop list  --photo a.jpg --brand nike --type tshirts ... --dry-run
 mastro depop me
 ```
 
-> **Why "mastro"?** It's the conductor — it doesn't play every instrument, it
-> coordinates the browser, the session, and the API so the whole thing performs.
+> **Why "mastro"?** In Italian a _mastro_ is the master of a craft — the
+> _mastro falegname_ (master carpenter), the expert who's earned the title.
+> That's the point: give people the right skills and infrastructure and they
+> become the master of any app they use — not waiting on an official API, but
+> driving the tools themselves, expertly.
 
 ---
 

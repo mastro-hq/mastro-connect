@@ -72,7 +72,7 @@ function path(asJson: boolean): number {
 }
 
 function printHelp(): void {
-  console.error(`mastro extension — install the browser extension mastro login needs.
+  ui.print(`mastro extension — install the browser extension mastro login needs.
 
 Usage:
   mastro extension install    Copy the bundled extension to ~/.mastro/extension
