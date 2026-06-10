@@ -1,6 +1,6 @@
 {
   "name": "mastro-connect",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Unofficial connectors for web apps, so agents can use them. Capture a browser session, replay it against reverse-engineered APIs.",
   "license": "MIT",
   "type": "module",

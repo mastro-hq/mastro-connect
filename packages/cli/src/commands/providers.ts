@@ -54,7 +54,7 @@ function list(ctx: CliContext, asJson: boolean): number {
   for (const r of rows) {
     const tick = r.logged_in ? pc.green("✓") : pc.dim("·");
     const origin = r.fetched ? pc.dim(` (fetched @${r.fetched})`) : "";
-    console.error(`  ${tick} ${pc.bold(r.id.padEnd(14))} ${pc.dim(r.display_name)}${origin}`);
+    ui.print(`  ${tick} ${pc.bold(r.id.padEnd(14))} ${pc.dim(r.display_name)}${origin}`);
   }
   ui.info("\n✓ = logged in.  Run: mastro login <id>");
   return 0;

@@ -87,7 +87,7 @@ function exitCodeOf(err: unknown): number {
 }
 
 function printHelp(): void {
-  console.error(`mastro — unofficial connectors for web apps, for agents and humans.
+  ui.print(`mastro — unofficial connectors for web apps, for agents and humans.
 
 Usage:
   mastro login <provider>        Capture a browser session for a connector

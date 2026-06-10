@@ -97,25 +97,25 @@ function printProviderHelp(provider: Provider): void {
     ui.info("This connector exposes no commands yet.");
     return;
   }
-  console.error("\nCommands:");
+  ui.print("\nCommands:");
   for (const c of cmds) {
-    console.error(`  ${pc.bold((c.command ?? "").padEnd(16))} ${pc.dim(c.summary ?? "")}`);
+    ui.print(`  ${pc.bold((c.command ?? "").padEnd(16))} ${pc.dim(c.summary ?? "")}`);
   }
-  console.error(`\nRun \`mastro ${provider.id} <command> --help\` for flags.`);
+  ui.print(`\nRun \`mastro ${provider.id} <command> --help\` for flags.`);
 }
 
 function printOperationHelp(providerId: string, op: OperationView): void {
   ui.heading(`mastro ${providerId} ${op.command}`);
-  if (op.summary) console.error(op.summary);
-  if (op.description) console.error(pc.dim(op.description));
+  if (op.summary) ui.print(op.summary);
+  if (op.description) ui.print(pc.dim(op.description));
 
   const flags = flagsFor(op);
   if (flags.length === 0) {
-    console.error("\nNo flags.");
+    ui.print("\nNo flags.");
     return;
   }
-  console.error("\nFlags:");
-  for (const f of flags) console.error("  " + flagHelp(f));
+  ui.print("\nFlags:");
+  for (const f of flags) ui.print("  " + flagHelp(f));
 }
 
 function flagHelp(f: CliFlag): string {
