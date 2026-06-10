@@ -1,6 +1,12 @@
-# Skill: order an Amazon product (Buy Now)
+---
+name: mastro-amazon-order
+description: Place a real Amazon Buy Now order for an ASIN via the mastro CLI — spends actual money on the account's default address and payment method. Use ONLY when the user explicitly asks to buy a specific product; always dry-run and confirm first.
+---
+
+# Order an Amazon product (Buy Now)
 
 Agent-facing playbook for placing a **real, money-spending** Buy Now order.
+If `mastro` is not on PATH, invoke it as `npx -y mastro-connect`.
 
 ## ⚠️ This spends real money
 

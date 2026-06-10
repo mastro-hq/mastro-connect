@@ -1,6 +1,12 @@
-# Skill: get Amazon product detail
+---
+name: mastro-amazon-detail
+description: Fetch one Amazon product's full details (price, rating, stock, seller, brand) by ASIN via the mastro CLI. Use for "is this in stock?", "who's the seller?", "what's the exact price?" on a specific product, often after an Amazon search.
+---
 
-Agent-facing playbook for reading one product's detail via `mastro`.
+# Get Amazon product detail
+
+Agent-facing playbook for reading one product's detail via `mastro`. If
+`mastro` is not on PATH, invoke it as `npx -y mastro-connect`.
 
 ## When to use
 

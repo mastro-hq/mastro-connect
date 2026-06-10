@@ -1,6 +1,12 @@
-# Skill: search Amazon
+---
+name: mastro-amazon-search
+description: Search Amazon products from the command line via the mastro CLI. Use when the user wants to find, compare, or price-check products on Amazon ("how much is a decent laptop stand on Amazon?", "find a usb-c hub under $30").
+---
 
-Agent-facing playbook for searching Amazon products via `mastro`.
+# Search Amazon
+
+Agent-facing playbook for searching Amazon products via `mastro`. If `mastro`
+is not on PATH, invoke it as `npx -y mastro-connect`.
 
 ## When to use
 

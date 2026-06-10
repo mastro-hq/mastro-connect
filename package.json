@@ -1,10 +1,36 @@
 {
   "name": "mastro-connect",
   "version": "0.1.0",
-  "private": true,
   "description": "Unofficial connectors for web apps, so agents can use them. Capture a browser session, replay it against reverse-engineered APIs.",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mastro-hq/mastro-connect.git"
+  },
+  "homepage": "https://github.com/mastro-hq/mastro-connect#readme",
+  "bugs": "https://github.com/mastro-hq/mastro-connect/issues",
+  "keywords": [
+    "agents",
+    "connectors",
+    "cli",
+    "skills",
+    "unofficial-api",
+    "depop",
+    "amazon"
+  ],
+  "bin": {
+    "mastro": "bin/mastro.cjs",
+    "mastro-connect": "bin/mastro.cjs"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "providers/",
+    "skills/",
+    "extension/",
+    "docs/"
+  ],
   "workspaces": [
     "packages/*"
   ],
@@ -15,6 +41,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p extension/tsconfig.json",
     "typecheck:ext": "tsc --noEmit -p extension/tsconfig.json",
     "test": "bun test",
+    "build": "bun build packages/cli/src/bin.ts --target=bun --outdir dist",
+    "prepack": "bun run build",
     "mastro": "bun run packages/cli/src/bin.ts"
   },
   "devDependencies": {

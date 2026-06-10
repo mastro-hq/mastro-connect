@@ -1,6 +1,12 @@
-# Skill: search Depop
+---
+name: mastro-depop-search
+description: Search Depop listings from the command line via the mastro CLI. Use when the user wants to find, browse, compare, or price-check secondhand fashion items on Depop ("what's a fair price for a vintage Carhartt jacket on Depop?", "find me black Nike trainers size 9").
+---
 
-Agent-facing playbook for searching Depop listings via `mastro`.
+# Search Depop
+
+Agent-facing playbook for searching Depop listings via `mastro`. If `mastro`
+is not on PATH, invoke it as `npx -y mastro-connect`.
 
 ## When to use
 
