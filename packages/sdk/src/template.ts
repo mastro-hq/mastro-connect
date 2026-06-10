@@ -32,19 +32,27 @@ export function renderTemplate(
   const whole = template.match(WHOLE);
   if (whole) {
     let expr = whole[1]!.trim();
-    // `${num:expr}` casts the resolved value to a JS number, so a body field
-    // serializes as a JSON number rather than a string (Depop wants numeric
-    // lat/lng, address id, variant_set). A non-numeric value is left as-is.
-    let cast: "number" | undefined;
+    // A leading `<mod>:` selects a value transform. `num:` casts to a JS number
+    // (a body field serializes as a JSON number, not a string — Depop wants
+    // numeric lat/lng, address id, variant_set). `unquote:` strips one layer of
+    // surrounding double-quotes from a string (LinkedIn stores JSESSIONID as
+    // `"ajax:123"` but its csrf-token header wants the bare `ajax:123`).
+    let cast: "number" | "unquote" | undefined;
     if (expr.startsWith("num:")) {
       cast = "number";
       expr = expr.slice(4).trim();
+    } else if (expr.startsWith("unquote:")) {
+      cast = "unquote";
+      expr = expr.slice(8).trim();
     }
     const value = lookup(expr, ctx);
     if (value === undefined && strict) throw new MissingTemplateValue(expr);
     if (cast === "number" && value != null && value !== "") {
       const n = Number(value);
       if (!Number.isNaN(n)) return n;
+    }
+    if (cast === "unquote" && typeof value === "string") {
+      return value.replace(/^"(.*)"$/s, "$1");
     }
     return value;
   }
