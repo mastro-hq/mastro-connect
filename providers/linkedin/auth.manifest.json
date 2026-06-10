@@ -1,0 +1,48 @@
+{
+  "schema_version": "browser-auth-manifest/v1",
+  "provider_id": "linkedin",
+  "display_name": "LinkedIn",
+  "launch": {
+    "url": "https://www.linkedin.com/feed/",
+    "open_tab": true,
+    "expected_origins": ["https://www.linkedin.com"],
+    "timeout_seconds": 180
+  },
+  "permissions": {
+    "host_permissions": ["https://www.linkedin.com/*"],
+    "observes_cookies": true,
+    "observes_request_headers": false,
+    "observes_request_body": false,
+    "observes_response_headers": false,
+    "injects_page_bridge": false,
+    "observes_storage": false
+  },
+  "capture": {
+    "cookies": [
+      {
+        "url": "https://www.linkedin.com",
+        "include_names_matching": [".*"],
+        "save_as": "cookies"
+      }
+    ]
+  },
+  "completion": {
+    "all": [
+      { "cookie_present": "li_at" },
+      { "cookie_present": "JSESSIONID" }
+    ]
+  },
+  "serialization": {
+    "output_schema": "capture-bundle/linkedin-web/v1",
+    "fields": {
+      "li_at": "${cookies.li_at.value}",
+      "jsessionid": "${cookies.JSESSIONID.value}",
+      "cookie_header": "${cookies.as_header}"
+    }
+  },
+  "security": {
+    "redact_fields": ["li_at", "csrf_token", "cookie_header"],
+    "persist_minimum": true,
+    "allowed_postback_origin": "http://127.0.0.1"
+  }
+}

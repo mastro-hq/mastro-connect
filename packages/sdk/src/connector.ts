@@ -131,28 +131,37 @@ export class Connector {
     const verifyOp = this.spec.auth().verify;
     if (!verifyOp) return { ok: true, checked_at: unixNow(), detail: "no verify operation declared" };
 
-    try {
-      const op = this.spec.byOperationId(verifyOp.operationId);
-      if (!op) {
-        return {
-          ok: false,
-          checked_at: unixNow(),
-          detail: `verify references unknown operation "${verifyOp.operationId}"`,
-        };
-      }
-      await this.call(op, {});
-      return { ok: true, checked_at: unixNow() };
-    } catch (err) {
-      const detail =
-        err instanceof RecaptureRequiredError
-          ? `HTTP ${err.status}`
-          : err instanceof ApiError
+    const op = this.spec.byOperationId(verifyOp.operationId);
+    if (!op) {
+      return {
+        ok: false,
+        checked_at: unixNow(),
+        detail: `verify references unknown operation "${verifyOp.operationId}"`,
+      };
+    }
+
+    // The verify probe runs right after capture, so for a via_browser connector
+    // it races the just-started browser proxy: the extension may not have picked
+    // up the loopback server yet, and the first in-tab fetch can land before the
+    // logged-in tab is ready (manifesting as a transient auth failure). Retry a
+    // couple of times with a short backoff before declaring the session dead, so
+    // a cold-start race doesn't reject a perfectly good credential.
+    let detail = "unknown error";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await this.call(op, {});
+        return { ok: true, checked_at: unixNow() };
+      } catch (err) {
+        detail =
+          err instanceof RecaptureRequiredError || err instanceof ApiError
             ? `HTTP ${err.status}`
             : err instanceof Error
               ? err.message
               : String(err);
-      return { ok: false, checked_at: unixNow(), detail };
+      }
+      if (attempt < 2) await sleep(1000 * (attempt + 1));
     }
+    return { ok: false, checked_at: unixNow(), detail };
   }
 
   /**

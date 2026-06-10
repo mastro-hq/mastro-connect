@@ -1,0 +1,176 @@
+openapi: 3.1.0
+info:
+  title: LinkedIn Voyager API (unofficial)
+  version: reverse-engineered-2026-06-10
+  description: >
+    Reverse-engineered from a logged-in linkedin.com session (see README), and
+    READ-ONLY: look up a member (`profile`), a company (`company`), and the
+    signed-in member (`me`) — no messaging, posting, or connection requests. All
+    three were PROVEN to return real data against a live session. The flagship
+    web UI has moved to a server-driven-UI layer (RSC), but these Voyager JSON
+    endpoints at /voyager/api/... are still live and serving. Search (people /
+    companies / jobs) is intentionally NOT exposed: it has no usable Voyager
+    endpoint anymore (typeahead 404s, blended-search/jobs need uncapturable
+    per-deploy ids) and now runs entirely through the RSC/SDUI layer — see the
+    note at the bottom of paths and the README. ⚠️ Automating linkedin.com
+    violates LinkedIn's User Agreement §8.2 and can get the signed-in account
+    restricted or banned; these are read calls (the lowest-risk slice) but the
+    risk is real and lands on YOUR warmed-up account. A raw non-browser client
+    gets challenged within ~8 requests, which is why every call runs through the
+    logged-in browser tab (x-mastro-replay.via_browser) and the rate is low.
+
+servers:
+  - url: https://www.linkedin.com
+
+# --- replay choreography (mastro extension) --------------------------------
+# Proven against a live session: the Voyager auth + headers below return 200
+# with real data for `me`/`profile`, but a raw client (Python, curl) gets
+# bounced to a 302-to-self bot-challenge after a handful of requests — it can't
+# clear LinkedIn's JS/cookie challenge. So requests run through the extension's
+# logged-in linkedin.com tab (same path as Depop/Amazon — see
+# docs/BROWSER-PROXY.md), which carries the real fingerprint + challenge state.
+# 302 to the same URL from outside the tab IS the bot-wall; recapture covers the
+# auth-expiry codes. Rate is low: read traffic still feeds LinkedIn's automation
+# heuristics, and the challenge trips on velocity, not just volume.
+x-mastro-replay:
+  via_browser: true
+  retry_on: [429]
+  recapture_on: [401, 403]
+  rate_limit:
+    requests_per_minute: 10
+
+# --- how a captured session becomes a live request -------------------------
+# Auth is the cookie jar: li_at is the HttpOnly session token; JSESSIONID
+# doubles as the CSRF secret. CONFIRMED from a live request: the JSESSIONID
+# cookie value is quoted ("ajax:123...") but the csrf-token header must be the
+# UNQUOTED value (ajax:123...). The extension capture serializer has no string
+# transforms, so the quotes are stripped at replay time via ${unquote:...} (see
+# README "The JSESSIONID quote gotcha" — the one-line SDK modifier). The header
+# set below is copied verbatim from a working linkedin.com request.
+x-mastro-auth:
+  required_fields: [li_at, jsessionid, cookie_header]
+  # Cheap read-only probe after capture: GET the signed-in member (the app's own
+  # `me`). Proven to 200 with real data on a live session. 302/401/403 means the
+  # session is challenged or dead — re-login. Stored in the credential.
+  verify:
+    operationId: me
+  headers:
+    cookie: "${auth.cookie_header}"
+    # Unquoted JSESSIONID — see the note above. If the SDK lacks the unquote
+    # modifier, this 403s; add it (one line, mirrors the existing `num:` cast).
+    csrf-token: "${unquote:auth.jsessionid}"
+    x-restli-protocol-version: "2.0.0"
+    x-li-lang: "en_US"
+    # Copied from a live request; clientVersion rolls with LinkedIn deploys but
+    # is not validated strictly — a recent value is enough.
+    x-li-track: '{"clientVersion":"1.13.44736","mpVersion":"1.13.44736","osName":"web","timezoneOffset":0,"deviceFormFactor":"DESKTOP","mpName":"voyager-web"}'
+    accept: "application/vnd.linkedin.normalized+json+2.1"
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: li_at
+
+security:
+  - cookieAuth: []
+
+paths:
+  # =========================================================================
+  # Who am I — the verify probe and a standalone command  [PROVEN: 200]
+  # =========================================================================
+  /voyager/api/me:
+    get:
+      operationId: me
+      x-mastro-command: me
+      summary: Show the logged-in member (verify probe).
+      description: >
+        Returns the signed-in member's mini-profile (the app's own `me` call).
+        Cheap and read-only — used as the post-capture liveness probe and
+        exposed as a command so you can confirm which account is active. Proven
+        to return real data (plainId, miniProfile urn) against a live session.
+      x-mastro-result: data
+      responses:
+        "200": { description: The signed-in member. }
+        "401": { description: Session expired or rejected. }
+
+  # =========================================================================
+  # Read a member profile by public id (the /in/<publicId> slug)  [PROVEN: 200]
+  # =========================================================================
+  # The fixed finder `q=memberIdentity` is baked into the path (it's not a user
+  # choice); buildUrl preserves a path's existing query and merges the dynamic
+  # params after it. Only `memberIdentity` is a real flag.
+  /voyager/api/identity/dash/profiles?q=memberIdentity:
+    get:
+      operationId: profile
+      x-mastro-command: profile
+      summary: Read a member's profile by public id.
+      description: >
+        Fetches a member's profile by their public identifier — the slug in
+        linkedin.com/in/<publicId> (e.g. "williamhgates"). Returns the identity
+        dash profile collection: the `data` envelope points at a profile urn in
+        `included[]`, where the member's name, headline, location, and the
+        position/education/skill entities live (normalized+json — entities are
+        referenced by urn and resolved from `included`). Proven to return real
+        data against a live session. Use `search-people` to find the publicId.
+      x-mastro-result: included
+      parameters:
+        - name: memberIdentity
+          in: query
+          required: true
+          description: The public id (the /in/<publicId> slug), e.g. "williamhgates".
+          schema: { type: string }
+      responses:
+        "200": { description: The member's profile (data + included entities). }
+        "401": { description: Auth expired or rejected. }
+        "404": { description: No such member. }
+
+  # =========================================================================
+  # Read a company by universal name
+  # =========================================================================
+  /voyager/api/organization/companies?q=universalName:
+    get:
+      operationId: company
+      x-mastro-command: company
+      summary: Read a company by universal name.
+      description: >
+        Fetches a company by its universal name — the slug in
+        linkedin.com/company/<universalName> (e.g. "microsoft"). Returns the
+        organization record: name, tagline, industry, headquarters, employee
+        count range, follower count, and website. Use `search-companies` to find
+        the universalName. (Same Voyager surface family as `profile`, which is
+        proven; verify through the browser tab on first use.)
+      x-mastro-result: elements
+      parameters:
+        - name: universalName
+          in: query
+          required: true
+          description: The company slug (the /company/<name> path), e.g. "microsoft".
+          schema: { type: string }
+      responses:
+        "200": { description: The company record. }
+        "401": { description: Auth expired or rejected. }
+        "404": { description: No such company. }
+
+  # =========================================================================
+  # Search people / companies / jobs — NOT EXPOSED (no working Voyager surface)
+  # =========================================================================
+  # Verified live on 2026-06-10 against a logged-in session — search does NOT
+  # have a usable Voyager endpoint anymore:
+  #   • /voyager/api/typeahead/hitsV2 (people + company)  → 404 (endpoint gone)
+  #   • /voyager/api/search/dash/clusters (blended)       → 500 (shape changed)
+  #   • /voyager/api/graphql blended-search               → 403 (needs a per-
+  #     deploy queryId that is NOT capturable — the SRP never calls it)
+  #   • /voyager/api/voyagerJobsDashJobCards              → 500 (needs an exact
+  #     decorationId + Rest.li query encoding)
+  # A live people-search page load fires ZERO voyager search queries: the
+  # flagship search/jobs UI is now server-driven UI (RSC) — it POSTs to
+  # /flagship-web/rsc-action/... and renders a base64 SDUI component tree, not a
+  # consumable JSON API. Wiring search/jobs therefore needs either (a) the SDUI
+  # rsc-action protocol (replay the POST + decode the component tree) or (b)
+  # browser-DOM scraping of the rendered SRP. Both are a separate effort from
+  # this Voyager-based connector and are intentionally left out rather than
+  # shipped returning 404/500. The PROVEN commands above (me / profile / company)
+  # are the working read surface. See README "Status & drift" for the re-capture
+  # path if you want to add SDUI-backed search.
