@@ -235,7 +235,7 @@ export class Connector {
   /** Invoke an operation with parsed CLI args (flag name → value). */
   async call(op: OperationView, args: Record<string, unknown>): Promise<CallResult> {
     const url = await this.buildUrl(op, args);
-    const headers = this.buildHeaders(op);
+    const headers = this.buildHeaders(op, args);
     const body = this.buildBody(op, args);
 
     const transport = await this.getTransport();
@@ -253,6 +253,18 @@ export class Connector {
     const data = extract ? await extractItems(text, extract) : parseMaybeJson(text);
     const resultPath = op.operation["x-mastro-result"];
     const result = resultPath ? getPath(data, resultPath) : data;
+
+    // An extract that found nothing on a 2xx is opaque (empty array, no error).
+    // MASTRO_DEBUG dumps the raw response so a drifted page shape is diagnosable.
+    if (process.env.MASTRO_DEBUG) {
+      console.error(`[mastro-debug] ${op.command ?? op.id} → HTTP ${status}, ${text.length} bytes`);
+      console.error(`[mastro-debug] body head:`, text.slice(0, 2000));
+      if (process.env.MASTRO_DEBUG_DUMP) {
+        await Bun.write(process.env.MASTRO_DEBUG_DUMP, text);
+        console.error(`[mastro-debug] full body → ${process.env.MASTRO_DEBUG_DUMP}`);
+      }
+    }
+
     return { status, data, result };
   }
 
@@ -325,14 +337,29 @@ export class Connector {
     return Promise.all(inputs.map((v) => this.resolver.resolveValue(resolve, v)));
   }
 
-  private buildHeaders(op: OperationView): Record<string, string> {
+  private buildHeaders(op: OperationView, args: Record<string, unknown> = {}): Record<string, string> {
     const headers: Record<string, string> = { accept: "*/*", ...this.authHeaders() };
     const reqBody = op.operation.requestBody;
     if (reqBody) headers["content-type"] = firstContentType(reqBody) ?? "application/json";
+    // Per-operation header overrides win over the global auth headers (so an
+    // SDUI op can swap the Voyager `accept` for its own and add `x-li-rsc-*`).
+    const opHeaders = op.operation["x-mastro-headers"];
+    if (opHeaders) Object.assign(headers, renderStringMap(opHeaders, this.callContext(args)));
     return headers;
   }
 
   private buildBody(op: OperationView, args: Record<string, unknown>): string | undefined {
+    // A raw body template (x-mastro-body) wins: a fixed envelope that can't be
+    // assembled from `parameters` (server-driven-UI search posts a big static
+    // payload with only a flag or two varying). Deep-resolve it against args +
+    // auth; a string template is sent verbatim, an object is JSON-serialized.
+    const rawBody = op.operation["x-mastro-body"];
+    if (rawBody !== undefined) {
+      const ctx = this.callContext(args);
+      const rendered = renderDeep(rawBody, ctx);
+      return typeof rendered === "string" ? rendered : JSON.stringify(rendered);
+    }
+
     const reqBody = op.operation.requestBody;
     if (!reqBody) return undefined;
 
@@ -360,6 +387,11 @@ export class Connector {
       uuid: () => randomUUID(),
       now: () => unixNow(),
     };
+  }
+
+  /** Auth context plus the call's CLI args, for `${args.*}` in a raw body. */
+  private callContext(args: Record<string, unknown>): TemplateContext {
+    return { ...this.authContext(), args };
   }
 
   // -- metadata fetch (for x-mastro-resolve) --------------------------------

@@ -1,18 +1,23 @@
 /**
- * x-mastro-extract — structured objects out of an HTML response.
+ * x-mastro-extract — structured objects out of a non-JSON response.
  *
- * Some sites have no JSON API at all: the data only exists server-rendered
- * (e.g. Amazon search results). An operation can declare `x-mastro-extract`
- * with an `items` selector (one match per result) and per-field selectors,
- * and the connector turns the HTML body into an array of flat objects.
+ * Some sites have no JSON API at all: the data only exists server-rendered.
+ * Two response shapes are handled, picked by the spec's `format` discriminant:
  *
- * Built on Bun's streaming HTMLRewriter, so a multi-megabyte page never
- * needs a DOM. Streaming has one consequence worth knowing: field values are
- * attached to the most recently opened item, and the first match per item
- * wins. Field selectors therefore must not match nested elements within one
- * item (a `div div`-style selector would double-count its text).
+ *   - `"html"` (default, this file) — server-rendered HTML (e.g. Amazon search
+ *     results), parsed with CSS selectors.
+ *   - `"flight"` (see flight.ts) — a React Server Components stream, where the
+ *     UI is a server-driven component tree rather than markup (LinkedIn search).
  *
- * Two shapes, chosen by whether `spec.items` is set:
+ * Both produce an array of flat objects that replaces the body as the data.
+ *
+ * The HTML path is built on Bun's streaming HTMLRewriter, so a multi-megabyte
+ * page never needs a DOM. Streaming has one consequence worth knowing: field
+ * values are attached to the most recently opened item, and the first match per
+ * item wins. Field selectors therefore must not match nested elements within
+ * one item (a `div div`-style selector would double-count its text).
+ *
+ * Two HTML shapes, chosen by whether `spec.items` is set:
  *   - **array mode** (`items` present): one object per `items` match, field
  *     selectors scoped inside it. Returns an array (search results).
  *   - **single-object mode** (`items` omitted): the whole document is one
@@ -20,8 +25,9 @@
  *     detail page). Every field needs a `selector` — there is no item element
  *     to read a bare `attr` off.
  */
-import type { MastroExtract } from "@mastro/core";
+import type { MastroExtract, MastroExtractHtml } from "@mastro/core";
 
+import { extractFlight } from "./flight.ts";
 import { decodeEntities } from "./util.ts";
 
 export type ExtractedItem = Record<string, string | null>;
@@ -38,16 +44,30 @@ function collapse(text: string): string {
 }
 
 /**
- * Run the extraction over an HTML document. In array mode each `spec.items`
- * match becomes one object and the result is an array; in single-object mode
- * (no `items`) the whole document yields one object. Every declared field is
- * present (null when nothing matched).
+ * Run an extraction over a response body, dispatching on `spec.format`:
+ *   - `"flight"` → walk a React Server Components stream (always an array).
+ *   - `"html"`/omitted → CSS extraction. In array mode (`items` set) each match
+ *     becomes one object and the result is an array; in single-object mode (no
+ *     `items`) the whole document yields one object.
+ * Every declared field is present (null when nothing matched).
  */
-export function extractItems(html: string, spec: MastroExtract & { items: string }): Promise<ExtractedItem[]>;
-export function extractItems(html: string, spec: MastroExtract): Promise<ExtractedItem[] | ExtractedItem>;
+export function extractItems(
+  body: string,
+  spec: MastroExtractHtml & { items: string },
+): Promise<ExtractedItem[]>;
+export function extractItems(body: string, spec: MastroExtract): Promise<ExtractedItem[] | ExtractedItem>;
 export async function extractItems(
-  html: string,
+  body: string,
   spec: MastroExtract,
+): Promise<ExtractedItem[] | ExtractedItem> {
+  if (spec.format === "flight") return extractFlight(body, spec);
+  return extractHtml(body, spec);
+}
+
+/** CSS extraction over an HTML document (the `format: "html"` path). */
+async function extractHtml(
+  html: string,
+  spec: MastroExtractHtml,
 ): Promise<ExtractedItem[] | ExtractedItem> {
   const itemsSelector = spec.items;
   const items: ExtractedItem[] = [];
