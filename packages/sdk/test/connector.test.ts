@@ -17,18 +17,20 @@ import {
 } from "@mastro/core";
 
 import { Connector, NotAuthenticatedError, RecaptureRequiredError } from "../src/index.ts";
+import { FLIGHT_PEOPLE_STREAM } from "./fixtures/flight-people.ts";
 
 // -- a tiny mock Depop-ish API ---------------------------------------------
 
 let server: Server<unknown>;
-let lastRequest: { url: string; headers: Headers } | undefined;
+let lastRequest: { url: string; headers: Headers; body?: string } | undefined;
 
 beforeAll(() => {
   server = Bun.serve({
     port: 0,
-    fetch(req) {
+    async fetch(req) {
       const url = new URL(req.url);
-      lastRequest = { url: url.toString(), headers: req.headers };
+      const body = req.method === "POST" ? await req.text() : undefined;
+      lastRequest = { url: url.toString(), headers: req.headers, body };
 
       if (url.pathname === "/search/") {
         if (req.headers.get("authorization") !== "Bearer tok-123") {
@@ -41,6 +43,8 @@ beforeAll(() => {
           { children: [{ children: [{ composite_id: "54.4", name: "M" }, { composite_id: "54.5", name: "L" }] }] },
         ]);
       }
+      // An SDUI-style endpoint: answers with a Flight stream, not JSON.
+      if (url.pathname === "/sdui/search/") return new Response(FLIGHT_PEOPLE_STREAM);
       if (url.pathname === "/expired/") return new Response("gone", { status: 419 });
       // A taxonomy endpoint whose session has lapsed — used to prove a 401 during
       // x-mastro-resolve surfaces as RecaptureRequiredError, not a parsed body.
@@ -123,6 +127,32 @@ function makeProvider(origin: string): Provider {
       "/recapFilters/": {
         get: { operationId: "recapFilters", "x-mastro-hidden": true },
       },
+      // A server-driven-UI search: a fixed body envelope (only `keywords`
+      // varies), an operation-specific header set, and a Flight-format response.
+      "/sdui/search/": {
+        post: {
+          operationId: "sduiSearch",
+          "x-mastro-command": "sdui-search",
+          parameters: [{ name: "keywords", in: "query", required: true, schema: { type: "string" } }],
+          requestBody: { required: true, content: { "application/json": {} } },
+          "x-mastro-body": {
+            envelope: "fixed",
+            url: "/search?q=${args.keywords}",
+            payload: { keywords: "${args.keywords}", origin: "HEADER" },
+          },
+          "x-mastro-headers": { accept: "*/*", "x-li-rsc-stream": "true" },
+          "x-mastro-extract": {
+            format: "flight",
+            item: "people-search-result",
+            fields: {
+              name: { from: "text", role: "name" },
+              headline: { from: "text", role: "headline" },
+              url: { from: "nav-url" },
+              publicId: { from: "nav-url", pattern: "/in/([^/?]+)" },
+            },
+          },
+        },
+      },
     },
   };
   const manifest = { provider_id: "mock", display_name: "Mock" } as Provider["manifest"];
@@ -185,4 +215,65 @@ test("a 401 while resolving a taxonomy → RecaptureRequiredError (not a parsed 
   // Resolving --sizes hits /recapFilters/, which 401s; that must propagate as a
   // recapture signal rather than being swallowed into an empty taxonomy.
   await expect(connector.call(op, { sizes: ["M"] })).rejects.toThrow(RecaptureRequiredError);
+});
+
+test("SDUI op: x-mastro-body templates the fixed envelope with the keyword", async () => {
+  const provider = makeProvider(server.url.origin);
+  const connector = Connector.load(provider, storeWith(validCred));
+  const op = connector.byCommand("sdui-search")!;
+
+  await connector.call(op, { keywords: "ada lovelace" });
+
+  // The body is the fixed envelope with `keywords` interpolated everywhere it
+  // appears — not a flat payload assembled from parameters.
+  const sent = JSON.parse(lastRequest!.body!);
+  expect(sent).toEqual({
+    envelope: "fixed",
+    url: "/search?q=ada lovelace",
+    payload: { keywords: "ada lovelace", origin: "HEADER" },
+  });
+  // The keyword also rides as a query param (parameters still feed the URL).
+  expect(new URL(lastRequest!.url).searchParams.get("keywords")).toBe("ada lovelace");
+});
+
+test("SDUI op: x-mastro-headers override the global auth accept header", async () => {
+  const provider = makeProvider(server.url.origin);
+  const connector = Connector.load(provider, storeWith(validCred));
+  const op = connector.byCommand("sdui-search")!;
+
+  await connector.call(op, { keywords: "x" });
+
+  expect(lastRequest?.headers.get("x-li-rsc-stream")).toBe("true");
+  expect(lastRequest?.headers.get("accept")).toBe("*/*");
+  // Global auth headers still apply (they're not wiped by the override).
+  expect(lastRequest?.headers.get("authorization")).toBe("Bearer tok-123");
+});
+
+test("SDUI op: a Flight response is extracted into people cards", async () => {
+  const provider = makeProvider(server.url.origin);
+  const connector = Connector.load(provider, storeWith(validCred));
+  const op = connector.byCommand("sdui-search")!;
+
+  const result = await connector.call(op, { keywords: "x" });
+
+  expect(result.data).toEqual([
+    {
+      name: "Ada Lovelace",
+      headline: "Mathematician at Analytical Engine Co.",
+      url: "https://www.linkedin.com/in/ada-lovelace/",
+      publicId: "ada-lovelace",
+    },
+    {
+      name: "Grace Hopper",
+      headline: "Rear Admiral | Compiler Pioneer",
+      url: "https://www.linkedin.com/in/grace-hopper-7b3/",
+      publicId: "grace-hopper-7b3",
+    },
+    {
+      name: "Ali H.",
+      headline: "منتج في الهندسة",
+      url: "https://www.linkedin.com/in/%D8%B9%D9%84%D9%8A-a434b5115/en/",
+      publicId: "علي-a434b5115",
+    },
+  ]);
 });

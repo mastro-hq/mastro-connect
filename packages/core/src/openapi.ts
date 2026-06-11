@@ -18,8 +18,11 @@
  *                     operationId).
  *   x-mastro-result   dotted path to the "interesting" part of a response, for
  *                     pretty-printing.
- *   x-mastro-extract  turn an HTML response into structured objects (CSS
- *                     selectors → fields) for sites with no JSON API.
+ *   x-mastro-extract  turn a non-JSON response into structured objects for
+ *                     sites with no JSON API — CSS selectors over HTML, or a
+ *                     tree walk over a React Server Components (Flight) stream.
+ *   x-mastro-body     a raw request-body template for fixed envelopes that
+ *                     can't be assembled from `parameters` (server-driven UI).
  *   x-mastro-hidden   omit this operation from the CLI (metadata-only endpoints).
  */
 
@@ -79,6 +82,26 @@ export interface Operation {
    * the operation's data (x-mastro-result then applies as usual).
    */
   "x-mastro-extract"?: MastroExtract;
+  /**
+   * A raw request body template, deep-resolved against the call context
+   * (`${args.*}` from CLI flags, `${auth.*}` from the credential, `${uuid}`).
+   * Use this when the body is a large *fixed* envelope that can't be assembled
+   * from `parameters` alone — e.g. LinkedIn's server-driven-UI search POSTs a
+   * big static payload with only `keywords` varying. When set, it replaces the
+   * parameter-derived body; declared `parameters` still feed the URL/query and
+   * the template. A string body is sent verbatim (after templating); an object
+   * is JSON-serialized.
+   */
+  "x-mastro-body"?: unknown;
+  /**
+   * Extra request headers for *this* operation, templated against the call
+   * context (`${args.*}`, `${auth.*}`, `${uuid}`) and merged after the global
+   * `x-mastro-auth.headers` so they can override them. Use when one operation
+   * needs a different header set than the rest — e.g. LinkedIn's SDUI search
+   * speaks a different `accept` and an `x-li-rsc-stream` flag than the Voyager
+   * JSON endpoints.
+   */
+  "x-mastro-headers"?: Record<string, string>;
   /** Hide this operation from the CLI (e.g. taxonomy-metadata endpoints). */
   "x-mastro-hidden"?: boolean;
   /**
@@ -293,10 +316,26 @@ export interface MastroAuth {
 }
 
 // ---------------------------------------------------------------------------
-// x-mastro-extract — structured objects out of an HTML response
+// x-mastro-extract — structured objects out of a non-JSON response
 // ---------------------------------------------------------------------------
 
-export interface MastroExtract {
+/**
+ * Turn a response that isn't a consumable JSON API into structured objects.
+ * Two response shapes are supported, picked by the `format` discriminant:
+ *   - `"html"` (default) — server-rendered HTML, fields read via CSS selectors
+ *     (Amazon/Depop search + detail pages). See {@link MastroExtractHtml}.
+ *   - `"flight"` — a React Server Components (Flight) stream, where the UI is a
+ *     server-driven component tree rather than markup (LinkedIn's search SRP
+ *     POSTs to /flagship-web/... and answers with a Flight tree, not JSON). See
+ *     {@link MastroExtractFlight}.
+ * Both produce the same thing: an array of flat objects that replaces the body
+ * as the operation's data (x-mastro-result then applies as usual).
+ */
+export type MastroExtract = MastroExtractHtml | MastroExtractFlight;
+
+export interface MastroExtractHtml {
+  /** HTML extraction is the default — `format` may be omitted. */
+  format?: "html";
   /**
    * CSS selector matching one element per result item — array mode (search
    * results). Omit for **single-object mode** (a product detail page): the
@@ -317,6 +356,60 @@ export interface ExtractField {
   selector?: string;
   /** Attribute name to read. Omit to take the element's text content. */
   attr?: string;
+}
+
+/**
+ * Extract result cards from a React Server Components (Flight) stream.
+ *
+ * The body is the Flight wire format: newline-delimited `<id>:<payload>` rows,
+ * where the page is one big row holding a nested tree of `["$", tag, key,
+ * props]` element tuples. There is no markup to run CSS against, so extraction
+ * walks the tree instead: it finds each *card* (an element tagged with a known
+ * view name), then reads ordered visible text and the card's navigation URL.
+ */
+export interface MastroExtractFlight {
+  format: "flight";
+  /**
+   * Identifies a result card: an element whose `viewTrackingSpecs.viewName`
+   * equals this string (LinkedIn tags each people result
+   * `"people-search-result"`). Each match becomes one output object.
+   */
+  item: string;
+  /** Output field name → where to read it from, within each card. */
+  fields: Record<string, FlightField>;
+}
+
+/**
+ * Where one Flight field comes from within a card. The `from` discriminant
+ * selects the source:
+ *   - `"nav-url"` — the card's first navigation URL (a `NavigateToUrl` action).
+ *     With `pattern`, the first capture group of the regex is kept (e.g. the
+ *     `/in/<publicId>` slug); without it, the whole URL.
+ *   - `"text"` — the card's visible text, read as an ordered sequence with
+ *     consecutive duplicates collapsed (an avatar's alt text repeats the name).
+ *     Pick one entry by `role` (semantic position) or `match` (first entry
+ *     matching the regex).
+ */
+export type FlightField = FlightNavUrlField | FlightTextField;
+
+export interface FlightNavUrlField {
+  from: "nav-url";
+  /** Keep capture group 1 of this regex applied to the URL (e.g. the slug). */
+  pattern?: string;
+}
+
+export interface FlightTextField {
+  from: "text";
+  /**
+   * Semantic position in the card's text sequence (after collapsing repeats
+   * and dropping the connection-distance token like "• 3rd+"):
+   *   - `"name"`     → the first line (the member's name),
+   *   - `"headline"` → the first line after the name that isn't the name again,
+   *   - `"location"` → the line after the headline.
+   */
+  role?: "name" | "headline" | "location";
+  /** First text entry matching this regex (e.g. "^•" for the distance badge). */
+  match?: string;
 }
 
 // ---------------------------------------------------------------------------

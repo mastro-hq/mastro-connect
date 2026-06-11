@@ -1,23 +1,29 @@
 openapi: 3.1.0
 info:
-  title: LinkedIn Voyager API (unofficial)
-  version: reverse-engineered-2026-06-10
+  title: LinkedIn Voyager + SDUI API (unofficial)
+  version: reverse-engineered-2026-06-11
   description: >
     Reverse-engineered from a logged-in linkedin.com session (see README), and
-    READ-ONLY: look up a member (`profile`), a company (`company`), and the
-    signed-in member (`me`) — no messaging, posting, or connection requests. All
-    three were PROVEN to return real data against a live session. The flagship
-    web UI has moved to a server-driven-UI layer (RSC), but these Voyager JSON
-    endpoints at /voyager/api/... are still live and serving. Search (people /
-    companies / jobs) is intentionally NOT exposed: it has no usable Voyager
-    endpoint anymore (typeahead 404s, blended-search/jobs need uncapturable
-    per-deploy ids) and now runs entirely through the RSC/SDUI layer — see the
-    note at the bottom of paths and the README. ⚠️ Automating linkedin.com
-    violates LinkedIn's User Agreement §8.2 and can get the signed-in account
-    restricted or banned; these are read calls (the lowest-risk slice) but the
-    risk is real and lands on YOUR warmed-up account. A raw non-browser client
-    gets challenged within ~8 requests, which is why every call runs through the
-    logged-in browser tab (x-mastro-replay.via_browser) and the rate is low.
+    READ-ONLY: look up a member (`profile`), a company (`company`), the
+    signed-in member (`me`), and search for people (`search-people`) — no
+    messaging, posting, or connection requests. me/profile/company hit the
+    Voyager JSON endpoints at /voyager/api/... (still live and serving real
+    data). `search-people` is different: LinkedIn's search UI moved to a
+    server-driven-UI layer (RSC), so the old Voyager search endpoints are dead
+    (typeahead 404s, blended-search/jobs need uncapturable per-deploy ids), and
+    search now POSTs to /flagship-web/search/results/all/ and answers with a
+    React Server Components (Flight) component tree — NOT a JSON API. The
+    connector replays that POST (keyed by `keywords`) and walks the Flight tree
+    to pull each people card (name, headline, location, profile URL) via
+    x-mastro-extract `format: flight`. Companies/jobs search is still NOT
+    exposed (each vertical is a separate SDUI surface). ⚠️ Automating
+    linkedin.com violates LinkedIn's User Agreement §8.2 and can get the
+    signed-in account restricted or banned; these are read calls but the risk
+    is real and lands on YOUR warmed-up account — and search is a *heavier*
+    signal than a single profile read (it's the classic scraping pattern), so
+    keep it human-paced. A raw non-browser client gets challenged within ~8
+    requests, which is why every call runs through the logged-in browser tab
+    (x-mastro-replay.via_browser) and the rate is low.
 
 servers:
   - url: https://www.linkedin.com
@@ -154,23 +160,120 @@ paths:
         "404": { description: No such company. }
 
   # =========================================================================
-  # Search people / companies / jobs — NOT EXPOSED (no working Voyager surface)
+  # Search people — server-driven-UI (RSC), NOT Voyager  [captured 2026-06-11]
   # =========================================================================
-  # Verified live on 2026-06-10 against a logged-in session — search does NOT
-  # have a usable Voyager endpoint anymore:
-  #   • /voyager/api/typeahead/hitsV2 (people + company)  → 404 (endpoint gone)
-  #   • /voyager/api/search/dash/clusters (blended)       → 500 (shape changed)
-  #   • /voyager/api/graphql blended-search               → 403 (needs a per-
-  #     deploy queryId that is NOT capturable — the SRP never calls it)
-  #   • /voyager/api/voyagerJobsDashJobCards              → 500 (needs an exact
-  #     decorationId + Rest.li query encoding)
-  # A live people-search page load fires ZERO voyager search queries: the
-  # flagship search/jobs UI is now server-driven UI (RSC) — it POSTs to
-  # /flagship-web/rsc-action/... and renders a base64 SDUI component tree, not a
-  # consumable JSON API. Wiring search/jobs therefore needs either (a) the SDUI
-  # rsc-action protocol (replay the POST + decode the component tree) or (b)
-  # browser-DOM scraping of the rendered SRP. Both are a separate effort from
-  # this Voyager-based connector and are intentionally left out rather than
-  # shipped returning 404/500. The PROVEN commands above (me / profile / company)
-  # are the working read surface. See README "Status & drift" for the re-capture
-  # path if you want to add SDUI-backed search.
+  # The old Voyager search endpoints are all dead (verified live):
+  #   • /voyager/api/typeahead/hitsV2               → 404 (endpoint gone)
+  #   • /voyager/api/search/dash/clusters           → 500 (shape changed)
+  #   • /voyager/api/graphql blended-search         → 403 (uncapturable queryId)
+  #   • /voyager/api/voyagerJobsDashJobCards        → 500 (needs decorationId)
+  # The flagship search UI is now server-driven UI (RSC): the SRP POSTs to
+  # /flagship-web/search/results/all/?keywords=… and answers with a React Server
+  # Components (Flight) component tree — NOT JSON. This op replays that POST
+  # (keyed only by `keywords`; the page-load request needs no prior searchId)
+  # and walks the Flight tree with x-mastro-extract `format: flight`. The big
+  # `newHierarchy`/presentation envelope is static SDUI navigation scaffolding,
+  # sent verbatim; only `keywords` varies (it appears in the `url` field and in
+  # requestedArguments.payload). The page captures 10 people per request; deeper
+  # pages use a separate pagination POST that needs a searchId from this
+  # response (not wired — keep it human-paced, one page is plenty of signal).
+  /flagship-web/search/results/all/?origin=GLOBAL_SEARCH_HEADER:
+    post:
+      operationId: searchPeople
+      x-mastro-command: search-people
+      summary: Search for people by keyword.
+      description: >
+        Searches LinkedIn for people matching `keywords` (names, titles,
+        companies — the global search box). Returns the people the first results
+        page renders inline (the top few — the rest lazy-load on scroll), each
+        with name, headline, location, connection distance, profile URL, and
+        publicId (the /in/<publicId> slug — feed it to `profile` for the full
+        record). This is the SDUI/Flight surface, not Voyager: heavier automation
+        signal than a single profile read (it's the classic scraping pattern), so
+        keep it human-paced.
+      parameters:
+        - name: keywords
+          in: query
+          required: true
+          description: The search query, e.g. "react engineer berlin".
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      # The fixed SDUI navigation envelope. `${args.keywords}` is interpolated
+      # in the two places LinkedIn varies it; everything else is the static
+      # screen-hierarchy scaffolding the web app sends on a fresh SRP load.
+      x-mastro-body:
+        $type: proto.sdui.actions.core.NavigateToScreen
+        screenId: com.linkedin.sdui.flagshipnav.search.SearchResultsAll
+        pageKey: search_srp_all
+        presentationStyle: PresentationStyle_FULL_PAGE
+        presentation:
+          $case: fullPage
+          fullPage: { $type: proto.sdui.actions.core.presentation.FullPagePresentation }
+        title: Search
+        newHierarchy:
+          $type: proto.sdui.navigation.ScreenHierarchy
+          screenHash: com.linkedin.sdui.flagshipnav.home.Home#0
+          screenId: com.linkedin.sdui.flagshipnav.home.Home
+          pageKey: ""
+          isAnchorPage: true
+          childHierarchy:
+            $type: proto.sdui.navigation.ScreenHierarchy
+            screenHash: com.linkedin.sdui.flagshipnav.search.SearchResults#0
+            screenId: com.linkedin.sdui.flagshipnav.search.SearchResults
+            pageKey: ""
+            isAnchorPage: true
+            childHierarchy:
+              $type: proto.sdui.navigation.ScreenHierarchy
+              screenHash: com.linkedin.sdui.flagshipnav.search.SearchResultsAll#4d18e495
+              screenId: com.linkedin.sdui.flagshipnav.search.SearchResultsAll
+              pageKey: ""
+              isAnchorPage: true
+              url: ""
+            url: ""
+          url: ""
+        url: "/search/results/all/?keywords=${args.keywords}&origin=GLOBAL_SEARCH_HEADER"
+        inheritActor: false
+        colorScheme: ColorScheme_UNKNOWN
+        disableScreenGutters: false
+        shouldHideMobileTopNavBar: true
+        shouldHideLoadingSpinner: false
+        screenTitle: [Search]
+        replaceCurrentScreen: false
+        shouldHideMobileTopNavBarDivider: false
+        clearBackStack: false
+        requestedArguments:
+          payload:
+            keywords: "${args.keywords}"
+            origin: GLOBAL_SEARCH_HEADER
+          states: []
+          requestMetadata: { $type: proto.sdui.common.RequestMetadata }
+          screenId: ""
+      # The SDUI endpoint speaks Flight, not Voyager JSON: it wants `x-li-rsc-
+      # stream: true` and a plain `accept`, overriding the global Voyager
+      # `accept: application/vnd.linkedin.normalized+json+2.1`. The app version
+      # rolls with deploys but isn't strictly validated — a recent value passes.
+      x-mastro-headers:
+        accept: "*/*"
+        x-li-rsc-stream: "true"
+        x-li-application-version: "0.2.5963"
+        x-li-anchor-page-key: d_flagship3_search_srp_all
+      # The body is a Flight stream, not JSON. Walk the component tree: each
+      # element tagged viewName "people-search-result" is one person; read the
+      # profile URL (and its /in/<publicId> slug) and the ordered visible text
+      # (name / headline / location) off the card.
+      x-mastro-extract:
+        format: flight
+        item: people-search-result
+        fields:
+          name:     { from: text, role: name }
+          headline: { from: text, role: headline }
+          location: { from: text, role: location }
+          distance: { from: text, match: "^•" }
+          url:      { from: nav-url }
+          publicId: { from: nav-url, pattern: "/in/([^/?]+)" }
+      responses:
+        "200": { description: People results (Flight tree → extracted cards). }
+        "401": { description: Auth expired or rejected. }

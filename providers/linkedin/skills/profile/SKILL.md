@@ -14,9 +14,12 @@ The user wants to read a specific LinkedIn **member** or **company** profile —
 their headline, experience, education, or the company's industry, size, and
 followers. You need the slug, which comes straight from the LinkedIn URL: a
 member's `publicId` is the `/in/<publicId>` part, a company's `universalName` is
-the `/company/<universalName>` part. There is no `search` command (LinkedIn
-moved search off the API — see the provider README), so the user must supply the
-profile URL or slug.
+the `/company/<universalName>` part.
+
+If the user only has a **name** (not a URL/slug), find the person first with
+`mastro linkedin search-people --keywords "<name>"` (the `mastro-linkedin-search`
+skill), then pass the matching result's `publicId` to `profile`. There's no
+company search.
 
 ## ⚠️ Account-risk caveat (tell the user once)
 
