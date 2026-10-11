@@ -37,6 +37,37 @@ export class FetchError extends Error {
   }
 }
 
+export interface RemoteProvider {
+  id: string;
+  display_name: string;
+}
+
+/** The connectors a repo offers at `ref`: every providers/<id>/ with a manifest. */
+export async function listRemoteProviders(repo: string, ref: string): Promise<RemoteProvider[]> {
+  const commit = await resolveCommit(repo, ref);
+  const ids = (await listTree(repo, commit))
+    .map((p) => p.match(/^providers\/([^/]+)\/auth\.manifest\.json$/)?.[1])
+    .filter((id): id is string => id !== undefined);
+  return Promise.all(
+    ids.map(async (id) => {
+      const body = await download(repo, commit, `providers/${id}/auth.manifest.json`);
+      return { id, display_name: displayName(new TextDecoder().decode(body)) ?? id };
+    }),
+  );
+}
+
+function displayName(manifestText: string): string | undefined {
+  try {
+    const data: unknown = JSON.parse(manifestText);
+    if (data !== null && typeof data === "object" && "display_name" in data && typeof data.display_name === "string") {
+      return data.display_name;
+    }
+  } catch {
+    // a malformed manifest still lists by id
+  }
+  return undefined;
+}
+
 /** Download providers/<id>/ at `ref` into ~/.mastro/providers/<id>. */
 export async function fetchProvider(id: string, repo: string, ref: string): Promise<ProviderLockEntry> {
   const commit = await resolveCommit(repo, ref);

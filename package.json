@@ -1,6 +1,6 @@
 {
   "name": "mastro-connect",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Build agent connectors for web apps: capture your browser session, describe the app's API in OpenAPI, drive it from the terminal.",
   "license": "MIT",
   "type": "module",

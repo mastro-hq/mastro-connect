@@ -56,10 +56,11 @@ mastro skills add <provider>/<skill>    # one skill
 
 ## Missing a connector?
 
-- `mastro providers --json` shows what's installed. Connectors not bundled
-  with mastro come from a connector repo:
-  `mastro providers add <id> --repo <owner>/<repo>` (private repos use
-  `GITHUB_TOKEN` or the user's `gh` login).
+- `mastro providers --json` shows what's installed;
+  `mastro providers available --json` shows the community catalog, and
+  `mastro providers add <id>` installs from it. Other repos:
+  `--repo <owner>/<repo>` (private repos use `GITHUB_TOKEN` or the user's
+  `gh` login).
 - No connector exists for the app? The `mastro-author` skill builds one
   (`mastro skills add mastro-author`). Ask the user before starting — it needs
   them logged in and clicking through the app once.

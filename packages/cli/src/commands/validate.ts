@@ -208,7 +208,7 @@ function checkWorkflow(
     return target !== undefined && target.method !== "get";
   });
   if (writes && !workflow.handoff) {
-    warnings.push(`${where}: workflow sends non-GET requests — make sure its skill requires --dry-run and user confirmation first`);
+    warnings.push(`${where}: workflow sends non-GET requests — if it changes state, its skill must require --dry-run and user confirmation first`);
   }
 }
 

@@ -97,8 +97,9 @@ Usage:
   mastro login <provider>        Capture a browser session for a connector
   mastro logout <provider>       Forget a stored session
   mastro status                  Show logged-in connectors
-  mastro providers               List available connectors
-  mastro providers add <id>      Fetch a connector from a GitHub repo (--repo owner/name)
+  mastro providers               List installed connectors
+  mastro providers available     List the community catalog's connectors
+  mastro providers add <id>      Fetch a connector (from the catalog, or --repo owner/name)
   mastro skills add <id>         Install a connector's agent skills (.claude/skills)
   mastro skills add mastro-author  Install the skill for building new connectors
   mastro validate <dir|id>       Check a connector definition
@@ -112,7 +113,7 @@ Global flags:
 
 Examples:
   mastro hackernews top --limit 5
-  mastro providers add myapp --repo you/connectors
-  mastro login myapp
+  mastro providers add reservecalifornia
+  mastro reservecalifornia parks "big sur"
   mastro skills add mastro-author --global`);
 }

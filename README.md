@@ -5,9 +5,10 @@
 **Build agent connectors for the web apps you use. Describe the app's API as data, and drive it from the terminal.**
 
 ```bash
-mastro hackernews top --limit 5          # the bundled example connector
-mastro login myapp                       # capture your session for a connector you wrote
-mastro myapp search "red jacket" --json
+mastro hackernews top --limit 5                       # the bundled example connector
+mastro providers add reservecalifornia                # one from the community catalog
+mastro reservecalifornia parks "big sur" --json       # no login needed for search
+mastro skills add mastro-author                       # let your agent build one for your app
 ```
 
 [Concept](#the-idea) · [Quickstart](#quickstart) · [How it works](#how-it-works) · [Build a connector](#building-a-connector) · [Agent skills](#agent-skills) · [Docs](#documentation) · [Ethics](#ethics--scope)
@@ -70,30 +71,30 @@ Or zero-install: prefix every command with `npx -y mastro-connect` instead of
 `mastro`. Working on mastro itself? Clone the repo, `bun install`, and use
 `bun run mastro …`.
 
-### 2. Try the example connector
+### 2. Try a connector
 
-mastro ships one connector, [`hackernews`](providers/hackernews), over Hacker
-News's official public API — no login needed:
+mastro ships one example, [`hackernews`](providers/hackernews), over Hacker
+News's official public API. More live in the community catalog,
+[mastro-hq/connectors](https://github.com/mastro-hq/connectors):
 
 ```bash
-mastro hackernews --help
-mastro hackernews top --limit 5 --json
+mastro hackernews top --limit 5 --json        # works out of the box, no login
+
+mastro providers available                    # what the catalog offers
+mastro providers add reservecalifornia        # fetched, pinned to a commit
+mastro reservecalifornia parks "pfeiffer" --json
+mastro reservecalifornia availability --facility 518 --start 2026-11-06 --end 2026-11-09 --json
 ```
 
-### 3. Build (or add) a connector
+### 3. Build a connector for an app you use
 
-Let an agent build one for an app you use:
+Let an agent build it:
 
 ```bash
 mastro skills add mastro-author --global   # then ask your agent: "make a mastro connector for <app>"
 ```
 
-…or write it by hand ([`docs/AUTHORING.md`](docs/AUTHORING.md)), or fetch one
-from a connector repo you have access to:
-
-```bash
-mastro providers add <id> --repo <owner>/<repo>
-```
+…or write it by hand ([`docs/AUTHORING.md`](docs/AUTHORING.md)).
 
 ### 4. Log in and use it
 
@@ -285,17 +286,20 @@ example: **[`providers/hackernews`](providers/hackernews)**.
 ### Where connectors live
 
 mastro searches, in order: `$MASTRO_PROVIDERS` (colon-separated directories),
-`~/.mastro/providers`, then the bundled example. Keep your connectors in their
-own git repo (`providers/<id>/` at its root) and either point
-`MASTRO_PROVIDERS` at a checkout or fetch from it:
+`~/.mastro/providers`, then the bundled example. `mastro providers add <id>`
+fetches from the community catalog,
+[mastro-hq/connectors](https://github.com/mastro-hq/connectors) — PRs welcome.
+Any GitHub repo with `providers/<id>/` at its root works the same way:
 
 ```bash
+mastro providers available --repo you/connectors   # what a repo offers
 mastro providers add myapp --repo you/connectors   # → ~/.mastro/providers/myapp, pinned to a commit
 mastro providers update                            # re-fetch everything you've added
 ```
 
-Private repos work: mastro authenticates with `GITHUB_TOKEN` / `GH_TOKEN`, or
-your `gh` login. Run `mastro validate` in the connector repo's CI.
+Private repos work too: mastro authenticates with `GITHUB_TOKEN` / `GH_TOKEN`,
+or your `gh` login. Or skip fetching and point `MASTRO_PROVIDERS` at a
+checkout. Run `mastro validate` in the connector repo's CI.
 
 ---
 
@@ -386,7 +390,10 @@ in apps **you** are logged into, the way you would by hand.
   of Service. You are responsible for the connectors you build and run.
 
 This repository ships the framework and one example connector over an official
-public API. It does not distribute connectors for third-party services.
+public API. Community connectors for third-party services live in
+[mastro-hq/connectors](https://github.com/mastro-hq/connectors); each is
+unofficial, documents what it does, and is removed on request from the
+service's operator.
 
 ---
 
@@ -394,7 +401,8 @@ public API. It does not distribute connectors for third-party services.
 
 Contributions to the framework are welcome — the core, SDK, CLI, extension,
 docs and the authoring skill. Run `bun test` and `bun run typecheck` before
-opening a PR.
+opening a PR. Connectors go to
+[mastro-hq/connectors](https://github.com/mastro-hq/connectors).
 
 ## License
 
