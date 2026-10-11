@@ -24,7 +24,7 @@ import {
 
 const ROOT_SKILL = "mastro";
 
-export function skills(ctx: CliContext, rest: string[], asJson: boolean): number {
+export async function skills(ctx: CliContext, rest: string[], asJson: boolean): Promise<number> {
   const [sub, ...args] = rest;
   switch (sub) {
     case "list":
@@ -71,7 +71,7 @@ function resolveSpec(ctx: CliContext, spec: string): SkillInfo[] {
   return [found];
 }
 
-function list(ctx: CliContext, providerId: string | undefined, asJson: boolean): number {
+async function list(ctx: CliContext, providerId: string | undefined, asJson: boolean): Promise<number> {
   const providerIds = providerId ? [providerId] : ctx.registry.list();
   const rows: SkillInfo[] = [rootSkill()];
   for (const id of providerIds) {
@@ -80,19 +80,20 @@ function list(ctx: CliContext, providerId: string | undefined, asJson: boolean):
   }
 
   if (asJson) {
-    emit(rows.map(({ source, name, description }) => ({ source, name, description })), true);
+    await emit(rows.map(({ source, name, description }) => ({ source, name, description })), true);
     return 0;
   }
 
   ui.heading("Available skills");
+  const width = Math.max(18, ...rows.map((s) => s.source.length));
   for (const s of rows) {
-    ui.print(`  ${pc.bold(s.source.padEnd(18))} ${pc.dim(truncate(s.description, 80))}`);
+    ui.print(`  ${pc.bold(s.source.padEnd(width))} ${pc.dim(truncate(s.description, 80))}`);
   }
   ui.info("\nInstall: mastro skills add <provider>[/<skill>]  [--global | --dir <path>]");
   return 0;
 }
 
-function add(ctx: CliContext, args: string[], asJson: boolean): number {
+async function add(ctx: CliContext, args: string[], asJson: boolean): Promise<number> {
   const { specs, flags } = splitFlags(args);
   if (specs.length === 0) {
     throw new UsageError("what to add? e.g. `mastro skills add depop` or `mastro skills add depop/search`");
@@ -114,7 +115,7 @@ function add(ctx: CliContext, args: string[], asJson: boolean): number {
   }));
 
   if (asJson) {
-    emit(installed, true);
+    await emit(installed, true);
     return 0;
   }
   for (const s of installed) ui.success(`${s.name} → ${s.path}`);
@@ -122,7 +123,7 @@ function add(ctx: CliContext, args: string[], asJson: boolean): number {
   return 0;
 }
 
-function update(ctx: CliContext, args: string[], asJson: boolean): number {
+async function update(ctx: CliContext, args: string[], asJson: boolean): Promise<number> {
   const { specs, flags } = splitFlags(args);
   if (specs.length > 0) throw new UsageError("skills update takes no positionals — it refreshes everything installed in the target");
   const target = installTarget(flags);
@@ -144,7 +145,7 @@ function update(ctx: CliContext, args: string[], asJson: boolean): number {
   }
 
   if (asJson) {
-    emit(results, true);
+    await emit(results, true);
     return 0;
   }
   if (results.length === 0) {

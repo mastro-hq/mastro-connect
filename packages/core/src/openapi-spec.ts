@@ -38,6 +38,11 @@ export interface OperationView {
   hidden: boolean;
   /** True when this command is a multi-step workflow, not a single request. */
   isWorkflow: boolean;
+  /**
+   * True when the operation declares `security: []` — public, so it's sent
+   * without auth headers and callable without a stored credential.
+   */
+  isPublic: boolean;
 }
 
 export class OpenApiSpec {
@@ -60,6 +65,14 @@ export class OpenApiSpec {
     const url = this.doc.servers?.[0]?.url;
     if (!url) throw new OpenApiSpecError("openapi document has no servers[].url");
     return url;
+  }
+
+  /**
+   * Base server URL for one operation: its own `servers[0]` (OpenAPI lets an
+   * operation override the document's servers), else the document's.
+   */
+  baseUrlFor(op: OperationView): string {
+    return op.operation.servers?.[0]?.url ?? this.baseUrl();
   }
 
   auth(): MastroAuth {
@@ -113,6 +126,7 @@ export class OpenApiSpec {
           operation,
           hidden,
           isWorkflow: operation["x-mastro-workflow"] !== undefined,
+          isPublic: Array.isArray(operation.security) && operation.security.length === 0,
         });
       }
     }

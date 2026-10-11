@@ -20,7 +20,7 @@ import { packageRoot, type CliContext } from "../context.ts";
 import { emit, ui } from "../output.ts";
 import { mastroHome } from "@mastro/core";
 
-export function extension(_ctx: CliContext, rest: string[], asJson: boolean): number {
+export async function extension(_ctx: CliContext, rest: string[], asJson: boolean): Promise<number> {
   const [sub, ...flags] = rest;
   switch (sub) {
     case "install":
@@ -41,7 +41,7 @@ function installedDir(): string {
   return join(mastroHome(), "extension");
 }
 
-function install(asJson: boolean, open: boolean): number {
+async function install(asJson: boolean, open: boolean): Promise<number> {
   const source = join(packageRoot(), "extension");
   if (!existsSync(join(source, "manifest.json"))) {
     throw new Error("this mastro install does not bundle the extension — reinstall the package.");
@@ -53,7 +53,7 @@ function install(asJson: boolean, open: boolean): number {
   const opened = open ? openExtensionsPage() : false;
 
   if (asJson) {
-    emit({ installed: dest, pathCopied: copied, pageOpened: opened }, true);
+    await emit({ installed: dest, pathCopied: copied, pageOpened: opened }, true);
     return 0;
   }
   ui.success(`Extension copied to ${dest}`);
@@ -136,11 +136,11 @@ function onPath(file: string): boolean {
   return spawnSync(locator, [file], { stdio: "ignore" }).status === 0;
 }
 
-function path(asJson: boolean): number {
+async function path(asJson: boolean): Promise<number> {
   const dest = installedDir();
   const installed = existsSync(join(dest, "manifest.json"));
   if (asJson) {
-    emit({ path: dest, installed }, true);
+    await emit({ path: dest, installed }, true);
     return 0;
   }
   console.log(dest);

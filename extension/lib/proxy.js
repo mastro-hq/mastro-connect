@@ -2,10 +2,13 @@
  * Browser-proxy runtime for the extension.
  *
  * Continuously long-polls the mastro proxy server (fixed loopback port). When a
- * request arrives, it runs the fetch INSIDE an authenticated tab on the target
- * origin — in the page's MAIN world — so the request carries that tab's solved
- * Cloudflare challenge + same-origin cookies. The service worker's own fetch
- * would be challenged, so we never use it for the proxied request.
+ * job arrives, it runs INSIDE an authenticated tab on the job's origin — in the
+ * page's MAIN world:
+ *   - `fetch`: the request carries that tab's solved Cloudflare challenge +
+ *     cookies. The service worker's own fetch would be challenged, so we never
+ *     use it for the proxied request.
+ *   - `handoff`: write localStorage, then open the URL in that tab and focus it
+ *     — the CLI staged something (a cart) a human must finish (pay).
  *
  * See docs/BROWSER-PROXY.md.
  */
@@ -49,7 +52,8 @@ async function handleRequest(request) {
   let response;
   try {
     const tabId = await tabForOrigin(request.origin);
-    response = await runFetchInTab(tabId, request);
+    response =
+      request.kind === "handoff" ? await handoffInTab(tabId, request) : await runFetchInTab(tabId, request);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     response = { status: 0, headers: {}, bodyText: JSON.stringify({ mastroProxyError: message }) };
@@ -101,10 +105,38 @@ function waitForComplete(tabId) {
 }
 
 /**
+ * Hand off to the user: write the job's localStorage entries in the tab's page
+ * context, then navigate the tab to the job's URL and bring it (and its
+ * window) to the front.
+ * @param {number} tabId
+ * @param {ProxyHandoffRequest} request
+ * @returns {Promise<ProxyResponse>}
+ */
+async function handoffInTab(tabId, request) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    args: [request.local_storage],
+    func: writeLocalStorage,
+  });
+  const tab = await chrome.tabs.update(tabId, { url: request.url, active: true });
+  if (tab && tab.windowId !== undefined) await chrome.windows.update(tab.windowId, { focused: true });
+  return { status: 200, headers: {}, bodyText: JSON.stringify({ ok: true }) };
+}
+
+/**
+ * Runs in the PAGE's MAIN world (serialized + injected).
+ * @param {Record<string, string>} entries
+ */
+function writeLocalStorage(entries) {
+  for (const [key, value] of Object.entries(entries)) window.localStorage.setItem(key, value);
+}
+
+/**
  * Run the request's fetch in the tab's MAIN world (page context). Returns the
  * status, headers, and body text.
  * @param {number} tabId
- * @param {ProxyRequest} request
+ * @param {ProxyFetchRequest} request
  * @returns {Promise<ProxyResponse>}
  */
 async function runFetchInTab(tabId, request) {

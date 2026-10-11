@@ -26,6 +26,9 @@ export { Receiver, type SessionPayload, type SessionStatus } from "./receiver.ts
 export {
   ProxyServer,
   type ProxyRequest,
+  type ProxyFetchRequest,
+  type ProxyHandoffRequest,
+  type ProxyJob,
   type ProxyResponse,
 } from "./proxy-server.ts";
 export { redact } from "./redact.ts";

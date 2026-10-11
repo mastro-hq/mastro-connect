@@ -24,6 +24,7 @@
  *   x-mastro-body     a raw request-body template for fixed envelopes that
  *                     can't be assembled from `parameters` (server-driven UI).
  *   x-mastro-hidden   omit this operation from the CLI (metadata-only endpoints).
+ *   x-mastro-transport  force one operation's transport (direct | browser).
  */
 
 // ---------------------------------------------------------------------------
@@ -68,8 +69,27 @@ export interface Operation {
   parameters?: Parameter[];
   requestBody?: RequestBody;
   responses?: Record<string, ResponseObject>;
-  /** AND-combined security requirements; each entry names schemes that all apply. */
+  /**
+   * AND-combined security requirements; each entry names schemes that all
+   * apply. An explicit empty array (`security: []`) is the OpenAPI way of
+   * saying "this operation is public": it's called without x-mastro-auth
+   * headers and works without `mastro login`.
+   */
   security?: SecurityRequirement[];
+  /**
+   * Per-operation servers (OpenAPI native). The first entry overrides the
+   * document's `servers` for this operation — for apps that split their API
+   * across hosts (ReserveCalifornia: a public search host + an authed booking
+   * host).
+   */
+  servers?: OpenApiServer[];
+  /**
+   * Force this operation's transport, overriding `x-mastro-replay`: "direct"
+   * (plain fetch — e.g. a public, unchallenged host in a via_browser spec) or
+   * "browser" (the extension proxy). A workflow step's `request.transport`
+   * still wins over this.
+   */
+  "x-mastro-transport"?: TransportKind;
   /** CLI subcommand name. Defaults to operationId. */
   "x-mastro-command"?: string;
   /** Dotted path into the response body for pretty-printing (e.g. "objects"). */
@@ -112,7 +132,10 @@ export interface Operation {
   "x-mastro-workflow"?: MastroWorkflow;
   /**
    * CLI flags for a workflow command (workflows have no `parameters` of their
-   * own — their requests pull from `${args.*}` and earlier `${steps.*}`).
+   * own — their requests pull from `${args.*}` and earlier `${steps.*}`). On a
+   * single-request operation, extra template-only flags: they feed
+   * `x-mastro-body` / `x-mastro-headers` via `${args.*}` but, unlike
+   * `parameters`, never the URL.
    */
   "x-mastro-args"?: WorkflowArg[];
 }
@@ -125,7 +148,27 @@ export interface MastroWorkflow {
   steps: WorkflowStep[];
   /** Dotted path into the final step's result to print (e.g. "result"). */
   result?: string;
+  /**
+   * After the steps succeed, hand the flow back to the user's browser: write
+   * page storage on the target origin, then open a URL there. For flows the
+   * CLI stages but a human must finish (pay on a hosted card form, solve a
+   * captcha) — e.g. ReserveCalifornia's cart page only shows a cart whose key
+   * is in its localStorage. Requires the mastro extension; skipped under
+   * --dry-run (listed in the plan instead).
+   */
+  handoff?: WorkflowHandoff;
 }
+
+/** Where a workflow hands off to the browser (see {@link MastroWorkflow.handoff}). */
+export interface WorkflowHandoff {
+  /** URL to open (template). Its origin is where `local_storage` is written. */
+  url: string;
+  /** localStorage key → templated value, written before the URL opens. */
+  local_storage?: Record<string, string>;
+}
+
+/** How a request is sent: plain fetch, or through the extension's browser tab. */
+export type TransportKind = "direct" | "browser";
 
 /**
  * A workflow step. Every step calls an operation (`operationId`) and stores its
@@ -156,6 +199,15 @@ export interface WorkflowStep {
   poll?: WorkflowPoll;
   /** Extract/transform the response into this step's stored result. */
   output?: WorkflowOutput;
+  /**
+   * Fail the step (and the workflow) when any of these templates resolves
+   * truthy; the resolved text is the error message. For APIs that answer
+   * HTTP 200 with an error inside the envelope (ReserveCalifornia's
+   * `{"Response":2,"Message":"…"}` / `Result.ErrorMessage`). Like
+   * `poll.until`, evaluated against the step's raw response
+   * (`${steps.<id>.Message}`), before `output` extraction.
+   */
+  fail_when?: string[];
 }
 
 export interface WorkflowRequest {
@@ -178,7 +230,7 @@ export interface WorkflowRequest {
   /** Skip x-mastro-auth for this request (e.g. presigned S3 PUT). */
   no_auth?: boolean;
   /** Force a transport: "direct" (plain fetch) or "browser" (extension proxy). */
-  transport?: "direct" | "browser";
+  transport?: TransportKind;
 }
 
 export interface WorkflowFormReplay {
@@ -347,7 +399,15 @@ export interface MastroExtractHtml {
   fields: Record<string, ExtractField>;
 }
 
-export interface ExtractField {
+/**
+ * Where one HTML field comes from: a single string value
+ * ({@link ExtractValueField}), or — when the item contains a repeated
+ * sub-element — a nested list of flat objects ({@link ExtractListField},
+ * discriminated by its `each` key).
+ */
+export type ExtractField = ExtractValueField | ExtractListField;
+
+export interface ExtractValueField {
   /**
    * CSS selector *within* the item element (the runner scopes it by prefixing
    * the `items` selector). Omit to read from the item element itself — only
@@ -356,6 +416,27 @@ export interface ExtractField {
   selector?: string;
   /** Attribute name to read. Omit to take the element's text content. */
   attr?: string;
+  /**
+   * Keep capture group 1 of this regex applied to the value (the whole match
+   * if the regex has no group) — e.g. the ASIN out of a `/dp/<asin>?ref=…`
+   * href. A value the regex doesn't match is skipped, so the first match
+   * whose value satisfies the pattern wins; none → null.
+   */
+  pattern?: string;
+}
+
+/**
+ * A field whose value is a list: one flat object per `each` match within the
+ * item (an order's line items). One level deep — entry fields are values.
+ */
+export interface ExtractListField {
+  /** CSS selector *within* the item matching one element per list entry. */
+  each: string;
+  /**
+   * Entry field → where to read it, scoped inside the entry element (a field
+   * with no `selector` reads `attr` off the entry element itself).
+   */
+  fields: Record<string, ExtractValueField>;
 }
 
 /**
@@ -461,6 +542,14 @@ export interface MastroReplay {
    * over `impersonate_browser`. See docs/BROWSER-PROXY.md.
    */
   via_browser?: boolean;
+  /**
+   * With `via_browser`, the origin whose tab runs the proxied fetch. Defaults
+   * to each request URL's own origin. Set it when the API lives on a separate
+   * host whose CORS policy admits the app's origin with credentials — the
+   * fetch then runs from the user's normal app tab (sharing its cookies)
+   * instead of a blank tab opened on the bare API host.
+   */
+  browser_tab_origin?: string;
   impersonate_browser?: boolean;
   user_agent?: string;
   retry_on?: number[];

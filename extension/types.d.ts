@@ -121,13 +121,26 @@ type MastroMessage =
 
 // -- browser proxy (run requests in an authenticated tab) -------------------
 
-interface ProxyRequest {
+type ProxyRequest = ProxyFetchRequest | ProxyHandoffRequest;
+
+/** Run a fetch in an authenticated tab on `origin` and relay the response. */
+interface ProxyFetchRequest {
+  kind: "fetch";
   id: string;
   origin: string;
   method: string;
   url: string;
   headers: Record<string, string>;
   body?: string;
+}
+
+/** Write localStorage on `origin`, then open `url` in that tab and focus it. */
+interface ProxyHandoffRequest {
+  kind: "handoff";
+  id: string;
+  origin: string;
+  url: string;
+  local_storage: Record<string, string>;
 }
 
 interface ProxyResponse {

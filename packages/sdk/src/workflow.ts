@@ -8,23 +8,26 @@
  * earlier ones via `${steps.<id>...}`, CLI flags via `${args.*}`, and (inside a
  * foreach) the current item via `${item}`. Steps can override the URL / body /
  * method / transport / auth — e.g. a presigned S3 PUT runs unauthenticated,
- * direct (not through the browser proxy), with a binary file body.
+ * direct (not through the browser proxy), with a binary file body. A step can
+ * `fail_when` its 2xx response carries an in-band error, and the workflow can
+ * end with a browser `handoff` for a human to finish (e.g. pay).
  *
  * See docs/WORKFLOWS.md.
  */
 import { readFileSync } from "node:fs";
 
 import type {
-  MastroWorkflow,
   OpenApiSpec,
   OperationView,
+  TransportKind,
   WorkflowFormReplay,
+  WorkflowHandoff,
   WorkflowStep,
 } from "@mastro/core";
 
 import { encodeForm, parseFormFields } from "./form.ts";
 import { renderDeep, renderTemplate, renderTemplateString, type TemplateContext } from "./template.ts";
-import { FetchTransport, type Transport } from "./transport.ts";
+import type { Transport } from "./transport.ts";
 import { getPath, metaRefreshUrl, parseMaybeJson, sleep } from "./util.ts";
 
 export class WorkflowError extends Error {
@@ -40,10 +43,25 @@ export interface WorkflowDeps {
   authHeaders(): Record<string, string>;
   /** Base template context (auth fields + ${uuid}/${now} generators). */
   baseContext(): TemplateContext;
-  /** Transport for authenticated, possibly-challenged API calls (browser/curl). */
-  apiTransport(): Promise<Transport>;
+  /**
+   * The transport for one request: an explicit kind ("direct" plain fetch,
+   * "browser" extension proxy), or `undefined` for the spec's default.
+   */
+  transport(kind: TransportKind | undefined): Promise<Transport>;
+  /**
+   * Hand the flow back to the user's browser (x-mastro-workflow.handoff):
+   * write localStorage on `url`'s origin, then open `url`. Required only by
+   * workflows that declare a handoff.
+   */
+  handoff?(url: string, localStorage: Record<string, string>): Promise<void>;
   /** When true, build the planned requests but don't send them. */
   dryRun?: boolean;
+}
+
+/** A rendered x-mastro-workflow.handoff (listed in a dry-run plan). */
+export interface PlannedHandoff {
+  url: string;
+  local_storage: Record<string, string>;
 }
 
 /** A request the workflow would send (returned for each step under --dry-run). */
@@ -56,9 +74,6 @@ export interface PlannedRequest {
 }
 
 export class WorkflowRunner {
-  /** Plain fetch for un-challenged, no-auth requests (e.g. presigned S3 PUT). */
-  private readonly direct: Transport = new FetchTransport();
-
   /** Planned requests, collected under --dry-run. */
   private readonly planned: PlannedRequest[] = [];
 
@@ -89,7 +104,14 @@ export class WorkflowRunner {
       steps[step.id] = await this.runStep(step, ctx, args);
     }
 
-    if (this.deps.dryRun) return { dry_run: true, planned_requests: this.planned };
+    const handoff = workflow.handoff ? this.renderHandoff(workflow.handoff, ctx()) : undefined;
+    if (this.deps.dryRun) {
+      return { dry_run: true, planned_requests: this.planned, ...(handoff ? { handoff } : {}) };
+    }
+    if (handoff) {
+      if (!this.deps.handoff) throw new Error(`operation "${op.id}" declares a handoff but no browser is available`);
+      await this.deps.handoff(handoff.url, handoff.local_storage);
+    }
     // `result` names a step (e.g. "createListing") or a dotted path into one
     // ("createListing.slug"); resolve it against the steps map directly.
     return workflow.result ? getPath(steps, workflow.result) : steps;
@@ -131,6 +153,7 @@ export class WorkflowRunner {
     // URLs) without an extra round-trip.
     if (!step.operationId) {
       const raw = step.value !== undefined ? renderTemplate(step.value, ctx(), this.opts()) : ctx().item;
+      this.checkFailure(step, raw, ctx);
       return this.applyOutput(step, raw);
     }
 
@@ -143,12 +166,17 @@ export class WorkflowRunner {
     for (let attempt = 0; attempt < attempts; attempt++) {
       const raw = await this.sendRequest(step, op, ctx);
 
-      if (!step.poll || this.deps.dryRun) return this.applyOutput(step, raw);
+      if (!step.poll || this.deps.dryRun) {
+        this.checkFailure(step, raw, ctx);
+        return this.applyOutput(step, raw);
+      }
 
       // Poll: store the RAW response provisionally so `until` can reference any
       // field of this step's response (not just its extracted output).
-      const probe: TemplateContext = { ...ctx(), steps: { ...(ctx().steps as object), [step.id]: raw } };
-      if (truthy(renderTemplate(step.poll.until, probe, { strict: false }))) return this.applyOutput(step, raw);
+      if (truthy(renderTemplate(step.poll.until, withRaw(step, raw, ctx), { strict: false }))) {
+        this.checkFailure(step, raw, ctx);
+        return this.applyOutput(step, raw);
+      }
       await sleep(delay);
     }
     throw new WorkflowError(step.id, `polling did not complete after ${attempts} attempts`);
@@ -165,9 +193,11 @@ export class WorkflowRunner {
     const method = (req.method ?? op.method).toUpperCase();
     const url = req.url
       ? renderTemplateString(req.url, c, this.opts())
-      : this.deps.spec.baseUrl().replace(/\/$/, "") + op.path;
+      : this.deps.spec.baseUrlFor(op).replace(/\/$/, "") + op.path;
 
-    const headers: Record<string, string> = req.no_auth ? {} : { ...this.deps.authHeaders() };
+    // Unauthenticated when the step says so (presigned URL) or the operation
+    // is public (`security: []`) — never leak the credential to either.
+    const headers: Record<string, string> = req.no_auth || op.isPublic ? {} : { ...this.deps.authHeaders() };
     if (req.headers) {
       for (const [k, v] of Object.entries(req.headers)) headers[k] = renderTemplateString(v, c, this.opts());
     }
@@ -177,14 +207,19 @@ export class WorkflowRunner {
       : this.buildBody(req.body, headers, c);
 
     if (this.deps.dryRun) {
-      this.planned.push({ step: step.id, method, url, headers: redactAuth(headers), body: previewBody(body) });
+      const secret = new Set((this.deps.spec.auth().redact ?? []).map((h) => h.toLowerCase()));
+      this.planned.push({ step: step.id, method, url, headers: redactAuth(headers, secret), body: previewBody(body) });
       // A stub keeps downstream `${steps.<id>.<anything>}` refs resolvable (and
       // thus non-throwing under strict dry-run), since the real output is
       // unknown until the request actually runs.
       return stepStub();
     }
 
-    const transport = req.transport === "direct" || req.no_auth ? this.direct : await this.deps.apiTransport();
+    // Step override, else `no_auth` implies a direct fetch (a presigned URL
+    // must not go through the logged-in tab), else the operation's own
+    // x-mastro-transport, else the spec default.
+    const kind = req.transport ?? (req.no_auth ? "direct" : op.operation["x-mastro-transport"]);
+    const transport = await this.deps.transport(kind);
     let res = await transport.send({ method, url, headers, body });
     let text = await res.text();
 
@@ -279,6 +314,31 @@ export class WorkflowRunner {
     return encodeForm(fields, set, form.unset);
   }
 
+  /**
+   * Throw when any `fail_when` template resolves truthy against the step's raw
+   * response — an in-band error on a 2xx (e.g. `{"Message":"Site unavailable"}`).
+   * Skipped under dry-run, where the response is a stub.
+   */
+  private checkFailure(step: WorkflowStep, raw: unknown, ctx: () => TemplateContext): void {
+    if (!step.fail_when || this.deps.dryRun) return;
+    const probe = withRaw(step, raw, ctx);
+    for (const condition of step.fail_when) {
+      const value = renderTemplate(condition, probe, { strict: false });
+      if (truthy(value)) {
+        throw new WorkflowError(step.id, typeof value === "string" ? value : `failed: ${condition}`);
+      }
+    }
+  }
+
+  /** Render the handoff's URL and storage values against the final context. */
+  private renderHandoff(handoff: WorkflowHandoff, ctx: TemplateContext): PlannedHandoff {
+    const localStorage: Record<string, string> = {};
+    for (const [k, v] of Object.entries(handoff.local_storage ?? {})) {
+      localStorage[k] = renderTemplateString(v, ctx, this.opts());
+    }
+    return { url: renderTemplateString(handoff.url, ctx, this.opts()), local_storage: localStorage };
+  }
+
   /** Extract this step's stored result per its `output` config. */
   private applyOutput(step: WorkflowStep, data: unknown): unknown {
     const out = step.output;
@@ -336,11 +396,14 @@ function stepStub(): unknown {
   );
 }
 
-/** Mask sensitive headers in a dry-run preview. */
-function redactAuth(headers: Record<string, string>): Record<string, string> {
+/**
+ * Mask sensitive headers in a dry-run preview: the usual suspects plus any the
+ * spec lists in `x-mastro-auth.redact` (lower-cased).
+ */
+function redactAuth(headers: Record<string, string>, extra: ReadonlySet<string>): Record<string, string> {
   const out: Record<string, string> = {};
   const secret = /^(authorization|cookie|x-user-id)$/i;
-  for (const [k, v] of Object.entries(headers)) out[k] = secret.test(k) ? "••••" : v;
+  for (const [k, v] of Object.entries(headers)) out[k] = secret.test(k) || extra.has(k.toLowerCase()) ? "••••" : v;
   return out;
 }
 
@@ -353,6 +416,12 @@ function previewBody(body: string | Uint8Array<ArrayBuffer> | undefined): unknow
   } catch {
     return body;
   }
+}
+
+/** The context with this step's RAW response bound at `steps.<id>` (for poll/fail_when). */
+function withRaw(step: WorkflowStep, raw: unknown, ctx: () => TemplateContext): TemplateContext {
+  const c = ctx();
+  return { ...c, steps: { ...(c.steps as object), [step.id]: raw } };
 }
 
 function truthy(v: unknown): boolean {

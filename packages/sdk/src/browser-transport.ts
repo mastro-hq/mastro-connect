@@ -9,7 +9,7 @@
  *
  * See docs/BROWSER-PROXY.md.
  */
-import { ProxyServer } from "@mastro/core";
+import { ProxyServer, type ProxyResponse } from "@mastro/core";
 
 import type { HttpRequest, HttpResponse, Transport } from "./transport.ts";
 
@@ -25,7 +25,16 @@ export class BrowserTransport implements Transport {
 
   private server?: ProxyServer;
 
-  constructor(private readonly timeoutMs = 45_000) {}
+  /**
+   * @param tabOrigin run every fetch in a tab on this origin instead of the
+   *   request URL's own (x-mastro-replay.browser_tab_origin) — for an API host
+   *   whose CORS admits the app's origin with credentials.
+   * @param timeoutMs how long to wait for the extension to answer one job.
+   */
+  constructor(
+    private readonly tabOrigin?: string,
+    private readonly timeoutMs = 45_000,
+  ) {}
 
   /** The loopback URL the extension polls. Starts the server on first use. */
   private ensureServer(): ProxyServer {
@@ -43,10 +52,11 @@ export class BrowserTransport implements Transport {
 
   async send(req: HttpRequest): Promise<HttpResponse> {
     const server = this.ensureServer();
-    const origin = new URL(req.url).origin;
+    const origin = this.tabOrigin ?? new URL(req.url).origin;
 
     const res = await server.send(
       {
+        kind: "fetch",
         origin,
         method: req.method,
         url: req.url,
@@ -61,6 +71,21 @@ export class BrowserTransport implements Transport {
       headers: res.headers,
       text: async () => res.bodyText,
     };
+  }
+
+  /**
+   * Hand a staged flow back to the user's browser: write `localStorage` on
+   * `url`'s origin, then open `url` in that tab and focus it (a workflow's
+   * x-mastro-workflow.handoff).
+   */
+  async handoff(url: string, localStorage: Record<string, string>): Promise<void> {
+    const res: ProxyResponse = await this.ensureServer().send(
+      { kind: "handoff", origin: new URL(url).origin, url, local_storage: localStorage },
+      this.timeoutMs,
+    );
+    if (res.status < 200 || res.status >= 300) {
+      throw new BrowserProxyError(`browser handoff to ${url} failed: ${res.bodyText.slice(0, 300)}`);
+    }
   }
 
   stop(): void {

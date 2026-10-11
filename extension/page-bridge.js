@@ -105,4 +105,20 @@
   emitStorage();
   // Re-snapshot shortly after load — SPAs often write auth context post-init.
   setTimeout(emitStorage, 1500);
+
+  // …and whenever the page writes localStorage: an SSO callback can store its
+  // token seconds after load (an async exchange), past the delayed snapshot.
+  // Coalesced so a burst of writes sends one snapshot.
+  let pending = false;
+  const setItem = Storage.prototype.setItem;
+  Storage.prototype.setItem = function (/** @type {string} */ key, /** @type {string} */ value) {
+    setItem.call(this, key, value);
+    if (this === window.localStorage && !pending) {
+      pending = true;
+      setTimeout(() => {
+        pending = false;
+        emitStorage();
+      }, 250);
+    }
+  };
 })();

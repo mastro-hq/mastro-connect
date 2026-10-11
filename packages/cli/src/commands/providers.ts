@@ -25,7 +25,7 @@ export async function providers(ctx: CliContext, rest: string[], asJson: boolean
   }
 }
 
-function list(ctx: CliContext, asJson: boolean): number {
+async function list(ctx: CliContext, asJson: boolean): Promise<number> {
   const lock = readLock();
   const ids = ctx.registry.list();
   const rows = ids.map((id) => {
@@ -41,7 +41,7 @@ function list(ctx: CliContext, asJson: boolean): number {
   });
 
   if (asJson) {
-    emit(rows, true);
+    await emit(rows, true);
     return 0;
   }
 
@@ -71,7 +71,7 @@ async function add(args: string[], asJson: boolean): Promise<number> {
     results.push({ id, ...entry });
     if (!asJson) ui.success(`${id} @ ${entry.commit.slice(0, 7)} → ~/.mastro/providers/${id}`);
   }
-  if (asJson) emit(results, true);
+  if (asJson) await emit(results, true);
   return 0;
 }
 
@@ -92,7 +92,7 @@ async function update(args: string[], asJson: boolean): Promise<number> {
     results.push({ id, ...entry });
     if (!asJson) ui.success(`${id} @ ${entry.commit.slice(0, 7)}`);
   }
-  if (asJson) emit(results, true);
+  if (asJson) await emit(results, true);
   return 0;
 }
 

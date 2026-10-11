@@ -57,9 +57,18 @@ export class TokenBucket {
  */
 export function throttled(transport: Transport, requestsPerMinute: number | undefined): Transport {
   if (!requestsPerMinute || requestsPerMinute <= 0) return transport;
-  const bucket = new TokenBucket(requestsPerMinute);
+  return withBucket(transport, new TokenBucket(requestsPerMinute));
+}
+
+/**
+ * Wrap a transport to wait on an existing bucket — so several transports (a
+ * connector's browser proxy and its direct fetch) draw from one provider-wide
+ * budget instead of each getting their own.
+ */
+export function withBucket(transport: Transport, bucket: TokenBucket | undefined): Transport {
+  if (!bucket) return transport;
   return {
-    name: `${transport.name}+throttle(${requestsPerMinute}/min)`,
+    name: `${transport.name}+throttle`,
     async send(req) {
       await bucket.take();
       return transport.send(req);

@@ -34,6 +34,7 @@ test("relays a request to a poller and resolves with its response", async () => 
 
   const res = await server.send(
     {
+      kind: "fetch",
       origin: "https://example.com",
       method: "GET",
       url: "https://example.com/search?q=x",
@@ -52,7 +53,7 @@ test("send() rejects on timeout when no extension polls", async () => {
   const { server } = startServer();
   await expect(
     server.send(
-      { origin: "https://example.com", method: "GET", url: "https://example.com/", headers: {} },
+      { kind: "fetch", origin: "https://example.com", method: "GET", url: "https://example.com/", headers: {} },
       300,
     ),
   ).rejects.toThrow(/timed out waiting for the extension/);
@@ -66,10 +67,38 @@ test("a request submitted while a poll is open is delivered to that poll", async
   // Swallow the eventual rejection when afterEach stops the server (no response
   // is ever posted for this request — we only assert it reached the poll).
   s.send(
-    { origin: "https://x.com", method: "GET", url: "https://x.com/", headers: {} },
+    { kind: "fetch", origin: "https://x.com", method: "GET", url: "https://x.com/", headers: {} },
     2000,
   ).catch(() => {});
 
   const req = await pollPromise.then((r) => r.json());
   expect(req.origin).toBe("https://x.com");
+});
+
+test("relays a handoff job (kind, url, local_storage) to the poller", async () => {
+  const { server, base } = startServer();
+
+  const pollerDone = (async () => {
+    const job = await fetch(`${base}/proxy/poll`).then((r) => r.json());
+    expect(job.kind).toBe("handoff");
+    expect(job.origin).toBe("https://app.example.com");
+    expect(job.local_storage).toEqual({ cartKey: "k-1" });
+    await fetch(`${base}/proxy/response/${job.id}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: 200, headers: {}, bodyText: '{"ok":true}' }),
+    });
+  })();
+
+  const res = await server.send(
+    {
+      kind: "handoff",
+      origin: "https://app.example.com",
+      url: "https://app.example.com/cart",
+      local_storage: { cartKey: "k-1" },
+    },
+    5000,
+  );
+  await pollerDone;
+  expect(res.status).toBe(200);
 });

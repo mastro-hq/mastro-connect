@@ -4,7 +4,7 @@ import { isExpired, unixNow } from "@mastro/core";
 import type { CliContext } from "../context.ts";
 import { emit, pc, ui } from "../output.ts";
 
-export function status(ctx: CliContext, asJson: boolean): number {
+export async function status(ctx: CliContext, asJson: boolean): Promise<number> {
   const stored = ctx.store.list();
   const rows = stored.map((id) => {
     const cred = ctx.store.get(id)!;
@@ -22,7 +22,7 @@ export function status(ctx: CliContext, asJson: boolean): number {
   });
 
   if (asJson) {
-    emit(rows, true);
+    await emit(rows, true);
     return 0;
   }
 

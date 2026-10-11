@@ -1,4 +1,6 @@
 /** Consistent terminal output: colored human text, or clean JSON for agents. */
+import { writeSync } from "node:fs";
+
 import pc from "picocolors";
 
 /** True when output should be machine-readable JSON (--json or piped). */
@@ -36,17 +38,34 @@ export const ui = {
   error: (msg: string) => err(pc.red("✗ ") + msg),
 };
 
-/** Print a command's result: pretty for humans, raw JSON for machines. → stdout */
-export function emit(data: unknown, asJson: boolean): void {
-  if (asJson) {
-    console.log(JSON.stringify(data, null, 2));
-    return;
+/**
+ * Print a command's result: pretty for humans, raw JSON for machines. → stdout
+ *
+ * Written straight to fd 1 rather than via console.log: stdout can be in
+ * non-blocking mode (terminal detection flips it), and console.log then
+ * silently drops whatever doesn't fit the 64 KB pipe buffer — `mastro … --json
+ * | jq` got truncated JSON (Bun.write stalls in the same state).
+ */
+export async function emit(data: unknown, asJson: boolean): Promise<void> {
+  const text = !asJson && typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  await writeAll(1, Buffer.from(text + "\n"));
+}
+
+/** Write every byte to `fd`, waiting out EAGAIN while a non-blocking pipe is full. */
+async function writeAll(fd: number, bytes: Buffer): Promise<void> {
+  let offset = 0;
+  while (offset < bytes.length) {
+    try {
+      offset += writeSync(fd, bytes, offset);
+    } catch (err) {
+      if (!isErrno(err, "EAGAIN")) throw err;
+      await Bun.sleep(2); // the reader hasn't drained the pipe yet
+    }
   }
-  if (typeof data === "string") {
-    console.log(data);
-    return;
-  }
-  console.log(JSON.stringify(data, null, 2));
+}
+
+function isErrno(err: unknown, code: string): boolean {
+  return err instanceof Error && "code" in err && err.code === code;
 }
 
 export { pc };

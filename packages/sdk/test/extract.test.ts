@@ -116,6 +116,93 @@ test("single-object fields are document-scoped, entity-decoded, whitespace-colla
   });
 });
 
+// -- pattern + list fields (Amazon order history) ----------------------------
+
+const ORDERS_SPEC = {
+  items: "div.order-card",
+  fields: {
+    orderId: { selector: ".order-id span" },
+    total: { selector: ".col:nth-child(2) .value" },
+    items: {
+      each: 'a[href*="/dp/"]',
+      fields: {
+        asin: { attr: "href", pattern: "/dp/(\\w{10})" },
+        title: { selector: "img", attr: "alt" },
+        price: { selector: ".price" },
+      },
+    },
+  },
+} satisfies MastroExtract;
+
+const ORDERS_PAGE = `
+<html><body>
+  <div class="order-card">
+    <div class="row">
+      <div class="col"><span class="value">May 1, 2026</span></div>
+      <div class="col"><span class="value">$30.00</span></div>
+    </div>
+    <div class="order-id"><span>111-1</span></div>
+    <a href="/dp/B000000001?ref=x"><img alt="Mug &amp; Saucer"><span class="price">$10.00</span></a>
+    <a href="/gp/buyagain?asin=B000000009">Buy it again</a>
+    <a href="/dp/B000000002?ref=x"><img alt="Kettle"></a>
+  </div>
+  <div class="order-card">
+    <div class="order-id"><span>111-2</span></div>
+  </div>
+  <div class="order-card">
+    <div class="order-id"><span>111-3</span></div>
+    <a href="/dp/B000000003"><img alt="Lamp"></a>
+  </div>
+</body></html>`;
+
+test("a list field yields one entry per `each` match, scoped to its own item", async () => {
+  const orders = await extractItems(ORDERS_PAGE, ORDERS_SPEC);
+  expect(orders.map((o) => o["orderId"])).toEqual(["111-1", "111-2", "111-3"]);
+  expect(orders[0]?.["items"]).toEqual([
+    { asin: "B000000001", title: "Mug & Saucer", price: "$10.00" },
+    { asin: "B000000002", title: "Kettle", price: null },
+  ]);
+  // An item with no entries gets an empty list (not null), and entries never
+  // leak into the neighbouring item.
+  expect(orders[1]?.["items"]).toEqual([]);
+  expect(orders[2]?.["items"]).toEqual([{ asin: "B000000003", title: "Lamp", price: null }]);
+});
+
+test("nth-child picks a sibling column; scalar fields sit beside list fields", async () => {
+  const [first, second] = await extractItems(ORDERS_PAGE, ORDERS_SPEC);
+  expect(first?.["total"]).toBe("$30.00");
+  expect(second?.["total"]).toBeNull();
+});
+
+test("pattern keeps capture group 1; a non-matching value is skipped for a later match", async () => {
+  const spec = {
+    items: "li",
+    fields: {
+      id: { selector: "a", attr: "href", pattern: "/dp/(\\w+)" },
+      whole: { selector: "span", pattern: "\\d+ stars" },
+      none: { selector: "span", pattern: "^never$" },
+    },
+  } satisfies MastroExtract;
+  const page = `<ul><li>
+    <a href="/help">help</a><a href="/dp/B0ABC">product</a>
+    <span>rated 4 stars overall</span>
+  </li></ul>`;
+  const [item] = await extractItems(page, spec);
+  expect(item).toEqual({ id: "B0ABC", whole: "4 stars", none: null });
+});
+
+test("list fields also work in single-object mode (document-scoped)", async () => {
+  const spec = {
+    fields: {
+      title: { selector: "h1" },
+      links: { each: "nav a", fields: { href: { attr: "href" } } },
+    },
+  } satisfies MastroExtract;
+  const page = `<h1>Page</h1><nav><a href="/a">A</a><a href="/b">B</a></nav><a href="/c">C</a>`;
+  const out = await extractItems(page, spec);
+  expect(out).toEqual({ title: "Page", links: [{ href: "/a" }, { href: "/b" }] });
+});
+
 // -- metaRefreshUrl (follow_html_refresh) ------------------------------------
 
 test("metaRefreshUrl reads an Akamai-style interstitial, entities decoded", () => {

@@ -24,6 +24,7 @@ import {
   type OperationView,
   type Parameter,
   type Provider,
+  type TransportKind,
   type ValidationResult,
 } from "@mastro/core";
 
@@ -33,8 +34,8 @@ import { extractItems } from "./extract.ts";
 import { Resolver, type MetadataFetcher } from "./resolver.ts";
 import { WorkflowRunner } from "./workflow.ts";
 import { renderDeep, renderStringMap, renderTemplate, type TemplateContext } from "./template.ts";
-import { selectTransport, type HttpResponse, type Transport } from "./transport.ts";
-import { throttled } from "./throttle.ts";
+import { FetchTransport, selectTransport, type HttpResponse, type Transport } from "./transport.ts";
+import { TokenBucket, withBucket } from "./throttle.ts";
 import { getPath, metaRefreshUrl, parseMaybeJson, sleep } from "./util.ts";
 
 export class NotAuthenticatedError extends Error {
@@ -70,10 +71,13 @@ export interface CallResult {
 }
 
 export class Connector {
-  private transport?: Transport;
-  /** The unwrapped base transport (the throttle wrapper hides it) — kept so
-   * `close()` can release a BrowserTransport's proxy server. */
-  private baseTransport?: Transport;
+  /** Throttled transports, built lazily: the spec's default and per-kind overrides. */
+  private readonly transports = new Map<TransportKind | "default", Transport>();
+  /** The one browser-proxy transport (shared by sends and handoffs) — kept so
+   * `close()` can release its proxy server. */
+  private browser?: BrowserTransport;
+  /** One provider-wide rate-limit bucket shared by every transport (none if undeclared). */
+  private readonly bucket: TokenBucket | undefined;
   private readonly resolver: Resolver;
 
   private constructor(
@@ -81,6 +85,8 @@ export class Connector {
     private readonly spec: OpenApiSpec,
     private readonly credential: { fields: Record<string, unknown> },
   ) {
+    const rpm = spec.replay().rate_limit?.requests_per_minute;
+    this.bucket = rpm && rpm > 0 ? new TokenBucket(rpm) : undefined;
     this.resolver = new Resolver(
       new JsonCache(provider.id),
       (operationId) => this.fetchMetadata(operationId),
@@ -88,9 +94,16 @@ export class Connector {
     );
   }
 
-  /** Build a connector, loading + checking the credential up front. */
-  static load(provider: Provider, store: CredentialStore): Connector {
+  /**
+   * Build a connector, loading + checking the credential up front. With
+   * `anonymous`, a missing or expired credential isn't an error — the
+   * connector runs with no auth fields, for public operations (`security: []`).
+   */
+  static load(provider: Provider, store: CredentialStore, opts: { anonymous?: boolean } = {}): Connector {
     const credential = store.get(provider.id);
+    if (opts.anonymous && (!credential || isExpired(credential))) {
+      return Connector.forCredential(provider, { fields: {} });
+    }
     if (!credential) throw new NotAuthenticatedError(provider.id);
     if (isExpired(credential)) {
       throw new NotAuthenticatedError(
@@ -178,7 +191,8 @@ export class Connector {
       spec: this.spec,
       authHeaders: () => this.authHeaders(),
       baseContext: () => this.authContext(),
-      apiTransport: () => this.getTransport(),
+      transport: (kind) => this.getTransport(kind),
+      handoff: (url, localStorage) => this.browserTransport().handoff(url, localStorage),
       dryRun: opts.dryRun ?? false,
     });
     return runner.run(op, resolved);
@@ -238,7 +252,7 @@ export class Connector {
     const headers = this.buildHeaders(op, args);
     const body = this.buildBody(op, args);
 
-    const transport = await this.getTransport();
+    const transport = await this.getTransport(op.operation["x-mastro-transport"]);
     const { status, text } = await this.request(transport, {
       method: op.method.toUpperCase(),
       url,
@@ -316,7 +330,7 @@ export class Connector {
       }
     }
 
-    const base = this.spec.baseUrl().replace(/\/$/, "");
+    const base = this.spec.baseUrlFor(op).replace(/\/$/, "");
     const url = new URL(base + path);
     for (const [k, v] of query.entries()) url.searchParams.append(k, v);
     return url.toString();
@@ -338,7 +352,8 @@ export class Connector {
   }
 
   private buildHeaders(op: OperationView, args: Record<string, unknown> = {}): Record<string, string> {
-    const headers: Record<string, string> = { accept: "*/*", ...this.authHeaders() };
+    // A public operation (`security: []`) never carries the credential.
+    const headers: Record<string, string> = { accept: "*/*", ...(op.isPublic ? {} : this.authHeaders()) };
     const reqBody = op.operation.requestBody;
     if (reqBody) headers["content-type"] = firstContentType(reqBody) ?? "application/json";
     // Per-operation header overrides win over the global auth headers (so an
@@ -401,7 +416,7 @@ export class Connector {
     const op = this.spec.byOperationId(operationId);
     if (!op) throw new Error(`x-mastro-resolve references unknown operation "${operationId}"`);
     const url = await this.buildUrl(op, {});
-    const transport = await this.getTransport();
+    const transport = await this.getTransport(op.operation["x-mastro-transport"]);
     const { status, text } = await this.request(transport, {
       method: op.method.toUpperCase(),
       url,
@@ -416,24 +431,42 @@ export class Connector {
 
   // -- transport + status handling ------------------------------------------
 
-  private async getTransport(): Promise<Transport> {
-    if (!this.transport) {
-      const replay = this.spec.replay();
-      this.baseTransport = replay.via_browser
-        ? new BrowserTransport()
-        : await selectTransport(replay.impersonate_browser ?? false);
-      // Pace every replayed request to the provider's declared budget. One
-      // bucket per connector so a workflow's foreach and the main call share it.
-      this.transport = throttled(this.baseTransport, replay.rate_limit?.requests_per_minute);
-    }
-    return this.transport;
+  /**
+   * The transport for a request: an explicit kind ("direct" plain fetch,
+   * "browser" extension proxy — from x-mastro-transport or a workflow step),
+   * else the spec's default (browser if via_browser, else fetch/curl per
+   * impersonate_browser). Every transport is paced by one shared bucket, so a
+   * workflow's foreach, its direct calls, and the main call share the
+   * provider's declared budget.
+   */
+  private async getTransport(kind?: TransportKind): Promise<Transport> {
+    const key = kind ?? "default";
+    const existing = this.transports.get(key);
+    if (existing) return existing;
+
+    const replay = this.spec.replay();
+    const base: Transport =
+      kind === "browser" || (kind === undefined && replay.via_browser)
+        ? this.browserTransport()
+        : kind === "direct"
+          ? new FetchTransport()
+          : await selectTransport(replay.impersonate_browser ?? false);
+    const transport = withBucket(base, this.bucket);
+    this.transports.set(key, transport);
+    return transport;
+  }
+
+  /** The connector's single browser-proxy transport, created on first use. */
+  private browserTransport(): BrowserTransport {
+    this.browser ??= new BrowserTransport(this.spec.replay().browser_tab_origin);
+    return this.browser;
   }
 
   /** Release any transport resources (e.g. the browser-proxy server). */
   close(): void {
-    if (this.baseTransport instanceof BrowserTransport) this.baseTransport.stop();
-    this.transport = undefined;
-    this.baseTransport = undefined;
+    this.browser?.stop();
+    this.browser = undefined;
+    this.transports.clear();
   }
 
   private async sendWithRetry(

@@ -46,6 +46,8 @@ beforeAll(() => {
       // An SDUI-style endpoint: answers with a Flight stream, not JSON.
       if (url.pathname === "/sdui/search/") return new Response(FLIGHT_PEOPLE_STREAM);
       if (url.pathname === "/expired/") return new Response("gone", { status: 419 });
+      // A public endpoint on a second "host" (its own server path prefix).
+      if (url.pathname === "/public-host/parks") return Response.json([{ id: 7, q: url.searchParams.get("q") }]);
       // A taxonomy endpoint whose session has lapsed — used to prove a 401 during
       // x-mastro-resolve surfaces as RecaptureRequiredError, not a parsed body.
       if (url.pathname === "/recapFilters/") return new Response("nope", { status: 401 });
@@ -104,6 +106,18 @@ function makeProvider(origin: string): Provider {
       },
       "/expired/": {
         get: { operationId: "expired", "x-mastro-command": "expired" },
+      },
+      // Public (security: []) and served from its own host, like a split
+      // search/booking API.
+      "/parks": {
+        get: {
+          operationId: "parks",
+          "x-mastro-command": "parks",
+          servers: [{ url: `${origin}/public-host` }],
+          security: [],
+          "x-mastro-transport": "direct",
+          parameters: [{ name: "q", in: "query", schema: { type: "string" } }],
+        },
       },
       "/searchRecap/": {
         get: {
@@ -276,4 +290,24 @@ test("SDUI op: a Flight response is extracted into people cards", async () => {
       publicId: "علي-7f3c2e91b",
     },
   ]);
+});
+
+test("a public operation goes to its own server without the credential", async () => {
+  const provider = makeProvider(server.url.origin);
+  const connector = Connector.load(provider, storeWith(validCred));
+  const op = connector.byCommand("parks")!;
+
+  const result = await connector.call(op, { q: "big sur" });
+
+  expect(new URL(lastRequest!.url).pathname).toBe("/public-host/parks");
+  expect(lastRequest?.headers.get("authorization")).toBeNull();
+  expect(lastRequest?.headers.get("x-user-id")).toBeNull();
+  expect(result.data).toEqual([{ id: 7, q: "big sur" }]);
+});
+
+test("anonymous load runs public operations with no stored credential", async () => {
+  const provider = makeProvider(server.url.origin);
+  const connector = Connector.load(provider, storeWith(undefined), { anonymous: true });
+  const result = await connector.call(connector.byCommand("parks")!, { q: "x" });
+  expect(result.data).toEqual([{ id: 7, q: "x" }]);
 });

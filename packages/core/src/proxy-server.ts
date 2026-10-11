@@ -13,7 +13,12 @@
 import { randomBytes } from "node:crypto";
 import type { Server } from "bun";
 
-export interface ProxyRequest {
+/** A job for the extension, discriminated by `kind`. */
+export type ProxyRequest = ProxyFetchRequest | ProxyHandoffRequest;
+
+/** Run an HTTP request inside an authenticated tab and relay the response. */
+export interface ProxyFetchRequest {
+  kind: "fetch";
   id: string;
   /** Origin whose authenticated tab should run the fetch, e.g. https://www.depop.com. */
   origin: string;
@@ -22,6 +27,23 @@ export interface ProxyRequest {
   headers: Record<string, string>;
   body?: string;
 }
+
+/**
+ * Hand a staged flow back to the user: write localStorage on `origin` (in an
+ * existing tab there, or a new one), then navigate that tab to `url` and bring
+ * it to the front. The response is a bare acknowledgement.
+ */
+export interface ProxyHandoffRequest {
+  kind: "handoff";
+  id: string;
+  /** Origin whose tab receives the storage writes — `url`'s origin. */
+  origin: string;
+  url: string;
+  local_storage: Record<string, string>;
+}
+
+/** A job as submitted by the CLI — the server assigns the `id`. */
+export type ProxyJob = Omit<ProxyFetchRequest, "id"> | Omit<ProxyHandoffRequest, "id">;
 
 export interface ProxyResponse {
   status: number;
@@ -91,10 +113,10 @@ export class ProxyServer {
     return this.extensionSeen;
   }
 
-  /** Submit a request and resolve when the extension returns its response. */
-  send(request: Omit<ProxyRequest, "id">, timeoutMs: number): Promise<ProxyResponse> {
+  /** Submit a job and resolve when the extension returns its response. */
+  send(job: ProxyJob, timeoutMs: number): Promise<ProxyResponse> {
     const id = randomBytes(12).toString("base64url");
-    const full: ProxyRequest = { ...request, id };
+    const full: ProxyRequest = { ...job, id };
 
     return new Promise<ProxyResponse>((resolve, reject) => {
       const timer = setTimeout(() => {

@@ -39,7 +39,7 @@ function dryRunner(spec: OpenApiSpec): WorkflowRunner {
     spec,
     authHeaders: () => ({}),
     baseContext: () => ({ uuid: () => "u" }),
-    apiTransport: async () => {
+    transport: async () => {
       throw new Error("must not send in dry-run");
     },
     dryRun: true,
@@ -80,7 +80,7 @@ test("dry-run plans every step (foreach expanded) without sending", async () => 
     spec,
     authHeaders: () => ({ authorization: "Bearer tok" }),
     baseContext: () => ({ auth: { token: "tok" }, uuid: () => "fixed-uuid" }),
-    apiTransport: async () => {
+    transport: async () => {
       throw new Error("must not send in dry-run");
     },
     dryRun: true,
@@ -132,7 +132,7 @@ test("non-dry-run returns the named result step's response", async () => {
     spec,
     authHeaders: () => ({ authorization: "Bearer tok" }),
     baseContext: () => ({ auth: { token: "tok" }, uuid: () => "fixed-uuid" }),
-    apiTransport: async () => ({
+    transport: async () => ({
       name: "mock",
       send: async (req: { url: string }) => ({
         status: 200,

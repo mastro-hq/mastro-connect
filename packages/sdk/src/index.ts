@@ -23,15 +23,16 @@ export {
   MissingTemplateValue,
   type TemplateContext,
 } from "./template.ts";
-export { extractItems, type ExtractedItem } from "./extract.ts";
+export { extractItems, type ExtractedItem, type ExtractedRecord, type ExtractedValue } from "./extract.ts";
 export { extractFlight } from "./flight.ts";
 export { parseFormFields, encodeForm, type FormField } from "./form.ts";
 export { Resolver, extractPath, type TaxonomyEntry, type MetadataFetcher } from "./resolver.ts";
 export { JsonCache } from "./cache.ts";
-export { TokenBucket, throttled } from "./throttle.ts";
+export { TokenBucket, throttled, withBucket } from "./throttle.ts";
 export {
   WorkflowRunner,
   WorkflowError,
   type WorkflowDeps,
   type PlannedRequest,
+  type PlannedHandoff,
 } from "./workflow.ts";

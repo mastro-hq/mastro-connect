@@ -19,10 +19,15 @@ import {
 import type { CliContext } from "../context.ts";
 import { emit, pc, ui } from "../output.ts";
 
-/** The CLI flags for an operation — its parameters, or a workflow's x-mastro-args. */
+/**
+ * The CLI flags for an operation — a workflow's x-mastro-args, or a single
+ * request's parameters plus any x-mastro-args (template-only flags that feed
+ * x-mastro-body / x-mastro-headers without also landing in the URL).
+ */
 function flagsFor(op: OperationView): CliFlag[] {
-  if (op.isWorkflow) return (op.operation["x-mastro-args"] ?? []).map(flagFromWorkflowArg);
-  return op.parameters.map(flagFromParameter);
+  const args = (op.operation["x-mastro-args"] ?? []).map(flagFromWorkflowArg);
+  if (op.isWorkflow) return args;
+  return [...op.parameters.map(flagFromParameter), ...args];
 }
 
 export async function runConnector(
@@ -71,16 +76,17 @@ export async function runConnector(
 
   const args = buildArgsMap(parsed, flags);
 
-  // Auth is only required to actually call the operation.
-  const connector = Connector.load(provider, ctx.store);
+  // Auth is only required to actually call the operation — and not at all for
+  // a public one (`security: []`).
+  const connector = Connector.load(provider, ctx.store, { anonymous: op.isPublic });
   try {
     if (op.isWorkflow) {
       const result = await connector.runWorkflow(op, args, { dryRun });
-      emit(result, asJson);
+      await emit(result, asJson);
       return 0;
     }
     const result = await connector.call(op, args);
-    emit(asJson ? result.data : (result.result ?? result.data), asJson);
+    await emit(asJson ? result.data : (result.result ?? result.data), asJson);
     return 0;
   } finally {
     // Release the browser-proxy server (if used) so the process can exit.
