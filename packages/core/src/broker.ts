@@ -38,8 +38,14 @@ export interface CaptureOptions {
 
 export class BrokerError extends Error {}
 
+/** Opens the bootstrap URL for the user. Injectable so tests never launch a real browser. */
+export type BrowserOpener = (url: string) => void;
+
 export class AuthBroker {
-  constructor(private readonly store: CredentialStore) {}
+  constructor(
+    private readonly store: CredentialStore,
+    private readonly openBrowser: BrowserOpener = openInBrowser,
+  ) {}
 
   /**
    * Run the full capture flow for a provider and persist the result.
@@ -61,7 +67,7 @@ export class AuthBroker {
     const bootstrapUrl = receiver.start();
     events.onBootstrapUrl?.(bootstrapUrl);
     events.onStatus?.(`Opening ${manifest.display_name} in your browser…`);
-    openInBrowser(bootstrapUrl);
+    this.openBrowser(bootstrapUrl);
 
     let bundle: CaptureBundle;
     try {

@@ -78,7 +78,8 @@ Save a **redacted** HAR for your notes. Never commit unredacted captures.
 ## 2. Write `auth.manifest.json`
 
 Declares what the extension captures and when it's done. (Unchanged by the
-OpenAPI switch — this is the browser half.) See `providers/hackernews`,
+OpenAPI switch — this is the browser half.) See the catalog's
+[`hackernews`](https://github.com/mastro-hq/connectors/tree/main/providers/hackernews),
 `skills/mastro-author/reference.md`, and the
 manifest schema in `packages/core/src/schemas/`.
 

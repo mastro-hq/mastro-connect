@@ -2,10 +2,11 @@
  * Fetching providers out-of-band from a connector repo on GitHub.
  *
  * Connectors live outside the framework (default: the mastro-hq/connectors
- * repo; `--repo` points anywhere else) and drift faster than CLI releases, so
+ * catalog; `--repo` points anywhere else) and drift faster than CLI releases, so
  * `mastro providers add` pulls the latest `providers/<id>/` straight from the
- * repo into `~/.mastro/providers/<id>` (which the registry searches ahead of
- * the bundled copies). Every fetch is pinned to the commit it resolved,
+ * repo into `~/.mastro/providers/<id>` (where the registry finds it; calling
+ * an uninstalled connector does the same from the catalog — see
+ * ensure-provider.ts). Every fetch is pinned to the commit it resolved,
  * recorded in `~/.mastro/providers/.lock.json` so `mastro providers update`
  * can re-fetch from the same repo/ref later.
  *
@@ -34,6 +35,18 @@ export class FetchError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "FetchError";
+  }
+}
+
+/** The repo was reachable but has no providers/<id>/ at that ref. */
+export class ProviderNotInRepoError extends UsageError {
+  constructor(
+    readonly providerId: string,
+    readonly repo: string,
+    readonly ref: string,
+  ) {
+    super(`no provider "${providerId}" in ${repo}@${ref} — see \`mastro providers available${repo === DEFAULT_REPO ? "" : ` --repo ${repo}`}\``);
+    this.name = "ProviderNotInRepoError";
   }
 }
 
@@ -73,9 +86,7 @@ export async function fetchProvider(id: string, repo: string, ref: string): Prom
   const commit = await resolveCommit(repo, ref);
   const prefix = `providers/${id}/`;
   const paths = (await listTree(repo, commit)).filter((p) => p.startsWith(prefix));
-  if (paths.length === 0) {
-    throw new UsageError(`no provider "${id}" in ${repo}@${ref} — check \`mastro skills list\` / the repo's providers/ directory`);
-  }
+  if (paths.length === 0) throw new ProviderNotInRepoError(id, repo, ref);
 
   const destRoot = join(userProvidersDir(), id);
   const staged: Array<{ dest: string; body: Uint8Array }> = [];

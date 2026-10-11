@@ -1,6 +1,7 @@
 /**
  * mastro CLI router.
  *
+ *   mastro setup                 guided first run (connectors, extension, skills)
  *   mastro login <provider>      capture a browser session
  *   mastro logout <provider>     forget a stored session
  *   mastro status                show logged-in connectors
@@ -21,6 +22,7 @@ import { providers } from "./commands/providers.ts";
 import { skills } from "./commands/skills.ts";
 import { extension } from "./commands/extension.ts";
 import { validate } from "./commands/validate.ts";
+import { setup } from "./commands/setup.ts";
 import { runConnector } from "./commands/connector.ts";
 import { jsonMode, ui } from "./output.ts";
 import { VERSION } from "./version.ts";
@@ -42,6 +44,8 @@ export async function run(argv: string[]): Promise<number> {
   const ctx = createContext();
 
   switch (command) {
+    case "setup":
+      return setup(ctx);
     case "login":
       return login(ctx, rest[0]);
     case "logout":
@@ -94,6 +98,7 @@ function printHelp(): void {
   ui.print(`mastro — connectors for web apps, for agents and humans.
 
 Usage:
+  mastro setup                   Guided first run: pick connectors, extension, agent skills
   mastro login <provider>        Capture a browser session for a connector
   mastro logout <provider>       Forget a stored session
   mastro status                  Show logged-in connectors
@@ -104,7 +109,7 @@ Usage:
   mastro skills add mastro-author  Install the skill for building new connectors
   mastro validate <dir|id>       Check a connector definition
   mastro extension install       Install the browser extension (needed for login)
-  mastro <provider> <command>    Call a connector's API
+  mastro <provider> <command>    Call a connector's API (installs it from the catalog on first use)
   mastro <provider> --help       Show a connector's commands
 
 Global flags:
@@ -112,8 +117,8 @@ Global flags:
   --version, -v                  Print version
 
 Examples:
+  mastro setup
   mastro hackernews top --limit 5
-  mastro providers add reservecalifornia
   mastro reservecalifornia parks "big sur"
   mastro skills add mastro-author --global`);
 }

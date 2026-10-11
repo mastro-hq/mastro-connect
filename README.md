@@ -5,10 +5,9 @@
 **Build agent connectors for the web apps you use. Describe the app's API as data, and drive it from the terminal.**
 
 ```bash
-mastro hackernews top --limit 5                       # the bundled example connector
-mastro providers add reservecalifornia                # one from the community catalog
-mastro reservecalifornia parks "big sur" --json       # no login needed for search
-mastro skills add mastro-author                       # let your agent build one for your app
+npx mastro-connect hackernews top --limit 5           # installs the connector on first use
+npx mastro-connect reservecalifornia parks "big sur"  # campsite search, no login
+npx mastro-connect setup                              # pick connectors, extension, agent skills
 ```
 
 [Concept](#the-idea) · [Quickstart](#quickstart) · [How it works](#how-it-works) · [Build a connector](#building-a-connector) · [Agent skills](#agent-skills) · [Docs](#documentation) · [Ethics](#ethics--scope)
@@ -73,18 +72,19 @@ Or zero-install: prefix every command with `npx -y mastro-connect` instead of
 
 ### 2. Try a connector
 
-mastro ships one example, [`hackernews`](providers/hackernews), over Hacker
-News's official public API. More live in the community catalog,
-[mastro-hq/connectors](https://github.com/mastro-hq/connectors):
+Connectors live in the community catalog,
+[mastro-hq/connectors](https://github.com/mastro-hq/connectors), and install
+themselves the first time you call one — nothing to set up first:
 
 ```bash
-mastro hackernews top --limit 5 --json        # works out of the box, no login
-
-mastro providers available                    # what the catalog offers
-mastro providers add reservecalifornia        # fetched, pinned to a commit
+mastro hackernews top --limit 5 --json        # the example connector (HN's official API)
 mastro reservecalifornia parks "pfeiffer" --json
 mastro reservecalifornia availability --facility 518 --start 2026-11-06 --end 2026-11-09 --json
 ```
+
+Prefer a guided start? `mastro setup` lists the catalog, installs what you
+pick, and offers the browser extension and agent skills if you need them.
+`mastro providers available` shows the catalog any time.
 
 ### 3. Build a connector for an app you use
 
@@ -281,15 +281,18 @@ write operations behind `--dry-run` and your confirmation.
    ```
 
 Full walkthrough: **[`docs/AUTHORING.md`](docs/AUTHORING.md)**. Minimal worked
-example: **[`providers/hackernews`](providers/hackernews)**.
+example: **[`hackernews`](https://github.com/mastro-hq/connectors/tree/main/providers/hackernews)**
+in the catalog.
 
 ### Where connectors live
 
-mastro searches, in order: `$MASTRO_PROVIDERS` (colon-separated directories),
-`~/.mastro/providers`, then the bundled example. `mastro providers add <id>`
-fetches from the community catalog,
-[mastro-hq/connectors](https://github.com/mastro-hq/connectors) — PRs welcome.
-Any GitHub repo with `providers/<id>/` at its root works the same way:
+mastro searches `$MASTRO_PROVIDERS` (colon-separated directories), then
+`~/.mastro/providers`; the package itself ships no connectors. Calling a
+connector that isn't installed fetches it from the community catalog,
+[mastro-hq/connectors](https://github.com/mastro-hq/connectors) — PRs welcome
+— into `~/.mastro/providers`, pinned to a commit. Only that catalog
+auto-installs; any other GitHub repo with `providers/<id>/` at its root works
+through `--repo`:
 
 ```bash
 mastro providers available --repo you/connectors   # what a repo offers
@@ -338,8 +341,6 @@ mastro-connect/
 │   │                workflow runner, templating
 │   └── cli/         @mastro/cli — the `mastro` binary
 ├── extension/       generic MV3 capture + browser-proxy runtime (plain JS, type-checked)
-├── providers/
-│   └── hackernews/  the example connector (official public API)
 ├── skills/
 │   ├── mastro/        the root agent skill (session model, conventions)
 │   └── mastro-author/ the connector-authoring skill

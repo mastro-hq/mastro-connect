@@ -12,12 +12,15 @@ import { AuthBroker, FileStore, ProviderRegistry, Receiver } from "../src/index.
 const PROVIDERS_ROOT = join(import.meta.dir, "fixtures/providers");
 const TMP = `/tmp/mastro-capture-test-${process.pid}`;
 
+/** The tests play the extension themselves — never open the user's real browser. */
+const noBrowser = (): void => {};
+
 afterEach(() => rmSync(TMP, { recursive: true, force: true }));
 
 test("broker captures, validates, and persists a credential", async () => {
   const registry = new ProviderRegistry([PROVIDERS_ROOT]);
   const store = new FileStore(TMP);
-  const broker = new AuthBroker(store);
+  const broker = new AuthBroker(store, noBrowser);
   const provider = registry.load("testapp");
 
   // Simulate the extension as soon as the bootstrap URL is live.
@@ -57,7 +60,7 @@ test("broker captures, validates, and persists a credential", async () => {
 test("broker rejects a capture missing api-profile required fields", async () => {
   const registry = new ProviderRegistry([PROVIDERS_ROOT]);
   const store = new FileStore(TMP);
-  const broker = new AuthBroker(store);
+  const broker = new AuthBroker(store, noBrowser);
   const provider = registry.load("testapp");
 
   const promise = broker.capture(provider, {
@@ -99,7 +102,7 @@ function simulateCapture(url: string, credentials: Record<string, unknown>): Pro
 test("verify probe success is recorded on the credential", async () => {
   const registry = new ProviderRegistry([PROVIDERS_ROOT]);
   const store = new FileStore(TMP);
-  const broker = new AuthBroker(store);
+  const broker = new AuthBroker(store, noBrowser);
   const provider = registry.load("testapp"); // spec declares x-mastro-auth.verify
 
   let probed = false;
@@ -122,7 +125,7 @@ test("verify probe success is recorded on the credential", async () => {
 test("a failed verify probe rejects login but persists the failure for status", async () => {
   const registry = new ProviderRegistry([PROVIDERS_ROOT]);
   const store = new FileStore(TMP);
-  const broker = new AuthBroker(store);
+  const broker = new AuthBroker(store, noBrowser);
   const provider = registry.load("testapp");
 
   const promise = broker.capture(

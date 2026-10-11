@@ -5,9 +5,9 @@ import { join } from "node:path";
 
 import { validateDir } from "../src/commands/validate.ts";
 
-const EXAMPLE = join(import.meta.dir, "..", "..", "..", "providers", "hackernews");
+const EXAMPLE = join(import.meta.dir, "fixtures", "providers", "hackernews");
 
-/** A scratch copy of the bundled example connector to break on purpose. */
+/** A scratch copy of the example connector fixture to break on purpose. */
 function exampleCopy(): string {
   const dir = join(mkdtempSync(join(tmpdir(), "mastro-validate-")), "hackernews");
   cpSync(EXAMPLE, dir, { recursive: true });
@@ -21,7 +21,7 @@ function edit(path: string, from: string, to: string): void {
 }
 
 describe("validateDir", () => {
-  test("the bundled example connector is clean", () => {
+  test("the example connector fixture is clean", () => {
     const report = validateDir(EXAMPLE);
     expect(report.errors).toEqual([]);
     expect(report.warnings).toEqual([]);

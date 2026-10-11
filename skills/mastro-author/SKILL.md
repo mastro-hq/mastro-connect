@@ -59,8 +59,8 @@ Pick where the connector lives:
   `export MASTRO_PROVIDERS=<repo>/providers` so mastro picks it up;
 - otherwise `~/.mastro/providers/<id>/` (searched automatically).
 
-The bundled example is a complete, minimal connector to copy from:
-`mastro validate hackernews --json` prints its `dir`.
+A complete, minimal connector to copy from: `mastro providers add hackernews`
+puts the catalog's example in `~/.mastro/providers/hackernews`.
 
 ### 1. Capture the traffic
 

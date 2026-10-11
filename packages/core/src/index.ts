@@ -18,6 +18,7 @@ export {
 export {
   AuthBroker,
   BrokerError,
+  type BrowserOpener,
   type CaptureEvents,
   type CaptureOptions,
   type CredentialVerifier,

@@ -4,12 +4,13 @@ import { Connector } from "@mastro/sdk";
 
 import type { CliContext } from "../context.ts";
 import { UsageError } from "../args.ts";
+import { ensureProvider } from "../ensure-provider.ts";
 import { ui } from "../output.ts";
 
 export async function login(ctx: CliContext, providerId: string | undefined): Promise<number> {
   if (!providerId) throw new UsageError("usage: mastro login <provider>");
 
-  const provider = ctx.registry.load(providerId);
+  const provider = await ensureProvider(ctx, providerId);
   ui.heading(`Connecting ${provider.manifest.display_name}`);
 
   const credential = await ctx.broker.capture(

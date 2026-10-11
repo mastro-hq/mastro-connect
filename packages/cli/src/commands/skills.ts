@@ -14,6 +14,7 @@ import { join } from "node:path";
 
 import { UsageError } from "../args.ts";
 import { packageRoot, type CliContext } from "../context.ts";
+import { ensureProvider } from "../ensure-provider.ts";
 import { emit, pc, ui } from "../output.ts";
 import {
   installSkill,
@@ -58,12 +59,12 @@ function coreSkills(): SkillInfo[] {
     .map((name) => readSkill(join(dir, name), name));
 }
 
-function rootSkill(): SkillInfo {
+export function rootSkill(): SkillInfo {
   return readSkill(join(packageRoot(), "skills", ROOT_SKILL), ROOT_SKILL);
 }
 
 /** Resolve a framework skill name, "<provider>" or "<provider>/<skill>" into skills to install. */
-function resolveSpec(ctx: CliContext, spec: string): SkillInfo[] {
+async function resolveSpec(ctx: CliContext, spec: string, asJson = false): Promise<SkillInfo[]> {
   const core = coreSkills().find((s) => s.source === spec);
   if (core) return [core];
 
@@ -71,7 +72,7 @@ function resolveSpec(ctx: CliContext, spec: string): SkillInfo[] {
   if (!providerId || extra !== undefined) {
     throw new UsageError(`bad skill spec "${spec}" — use <provider> or <provider>/<skill>`);
   }
-  const provider = ctx.registry.load(providerId);
+  const provider = await ensureProvider(ctx, providerId, { asJson });
   const available = providerSkills(provider.id, provider.dir);
   if (available.length === 0) {
     throw new UsageError(`provider "${providerId}" ships no skills`);
@@ -120,7 +121,7 @@ async function add(ctx: CliContext, args: string[], asJson: boolean): Promise<nu
   const toInstall = new Map<string, SkillInfo>();
   toInstall.set(ROOT_SKILL, rootSkill());
   for (const spec of specs) {
-    for (const skill of resolveSpec(ctx, spec)) toInstall.set(skill.name, skill);
+    for (const skill of await resolveSpec(ctx, spec, asJson)) toInstall.set(skill.name, skill);
   }
 
   const installed = [...toInstall.values()].map((skill) => ({
@@ -147,7 +148,7 @@ async function update(ctx: CliContext, args: string[], asJson: boolean): Promise
   for (const { provenance } of installedSkills(target)) {
     let skill: SkillInfo | undefined;
     try {
-      [skill] = resolveSpec(ctx, provenance.source);
+      [skill] = await resolveSpec(ctx, provenance.source, asJson);
     } catch {
       skill = undefined;
     }

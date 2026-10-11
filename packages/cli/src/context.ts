@@ -20,10 +20,9 @@ export function userProvidersDir(): string {
 }
 
 /**
- * The installed package root — the directory that ships `skills/` (and the
- * bundled example `providers/`). Found by walking up from this module, so it
- * works both from the repo (packages/cli/src/) and from the published bundle
- * (dist/).
+ * The installed package root — the directory that ships `skills/` and
+ * `extension/`. Found by walking up from this module, so it works both from
+ * the repo (packages/cli/src/) and from the published bundle (dist/).
  */
 export function packageRoot(): string {
   let dir = dirname(fileURLToPath(import.meta.url));
@@ -41,13 +40,14 @@ export function packageRoot(): string {
 /**
  * Provider search roots, in priority order:
  *   1. $MASTRO_PROVIDERS (colon-separated) — explicit overrides
- *   2. ~/.mastro/providers — fetched via `mastro providers add`
- *   3. the package's bundled `providers/` directory (the example connector)
+ *   2. ~/.mastro/providers — fetched via `mastro providers add`, or installed
+ *      automatically from the catalog on first use (see ensure-provider.ts)
+ * The package ships no connectors of its own.
  */
 function providerRoots(): string[] {
   const env = process.env.MASTRO_PROVIDERS;
   const fromEnv = env ? env.split(":").map((p) => resolve(p)) : [];
-  return [...fromEnv, userProvidersDir(), join(packageRoot(), "providers")];
+  return [...fromEnv, userProvidersDir()];
 }
 
 export function createContext(): CliContext {

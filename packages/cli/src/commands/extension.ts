@@ -24,7 +24,7 @@ export async function extension(_ctx: CliContext, rest: string[], asJson: boolea
   const [sub, ...flags] = rest;
   switch (sub) {
     case "install":
-      return install(asJson, !flags.includes("--no-open"));
+      return installExtension(asJson, !flags.includes("--no-open"));
     case "path":
       return path(asJson);
     case undefined:
@@ -41,7 +41,12 @@ function installedDir(): string {
   return join(mastroHome(), "extension");
 }
 
-async function install(asJson: boolean, open: boolean): Promise<number> {
+/** True once `mastro extension install` has copied the extension into place. */
+export function extensionInstalled(): boolean {
+  return existsSync(join(installedDir(), "manifest.json"));
+}
+
+export async function installExtension(asJson: boolean, open: boolean): Promise<number> {
   const source = join(packageRoot(), "extension");
   if (!existsSync(join(source, "manifest.json"))) {
     throw new Error("this mastro install does not bundle the extension — reinstall the package.");
@@ -138,7 +143,7 @@ function onPath(file: string): boolean {
 
 async function path(asJson: boolean): Promise<number> {
   const dest = installedDir();
-  const installed = existsSync(join(dest, "manifest.json"));
+  const installed = extensionInstalled();
   if (asJson) {
     await emit({ path: dest, installed }, true);
     return 0;

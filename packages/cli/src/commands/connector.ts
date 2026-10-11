@@ -17,6 +17,7 @@ import {
   type CliFlag,
 } from "../args.ts";
 import type { CliContext } from "../context.ts";
+import { ensureProvider } from "../ensure-provider.ts";
 import { emit, pc, ui } from "../output.ts";
 
 /**
@@ -36,7 +37,7 @@ export async function runConnector(
   rest: string[],
   asJson: boolean,
 ): Promise<number> {
-  const provider = ctx.registry.load(providerId);
+  const provider = await ensureProvider(ctx, providerId, { asJson });
 
   if (!provider.spec) {
     ui.error(`"${providerId}" has no OpenAPI spec yet — only \`mastro login ${providerId}\` works.`);
