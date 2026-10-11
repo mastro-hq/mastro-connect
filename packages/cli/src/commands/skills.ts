@@ -3,11 +3,13 @@
  *
  *   mastro skills list [provider]            what's available
  *   mastro skills add <provider>[/<skill>]   install (plus the root mastro skill)
+ *   mastro skills add mastro-author          install a framework skill by name
  *   mastro skills update                     refresh everything installed here
  *
  * Install target: ./.claude/skills (project) by default; --global for
  * ~/.claude/skills; --dir <path> for anything else (e.g. .agents/skills).
  */
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { UsageError } from "../args.ts";
@@ -43,14 +45,27 @@ export async function skills(ctx: CliContext, rest: string[], asJson: boolean): 
   }
 }
 
-/** The general mastro skill, shipped at the package root next to providers/. */
+/**
+ * Framework skills shipped in the package's `skills/` directory: the root
+ * `mastro` skill (session model) and the rest (e.g. `mastro-author`), each
+ * installable by its directory name.
+ */
+function coreSkills(): SkillInfo[] {
+  const dir = join(packageRoot(), "skills");
+  return readdirSync(dir)
+    .filter((name) => existsSync(join(dir, name, "SKILL.md")))
+    .sort((a, b) => (a === ROOT_SKILL ? -1 : b === ROOT_SKILL ? 1 : a.localeCompare(b)))
+    .map((name) => readSkill(join(dir, name), name));
+}
+
 function rootSkill(): SkillInfo {
   return readSkill(join(packageRoot(), "skills", ROOT_SKILL), ROOT_SKILL);
 }
 
-/** Resolve "<provider>" or "<provider>/<skill>" specs into skills to install. */
+/** Resolve a framework skill name, "<provider>" or "<provider>/<skill>" into skills to install. */
 function resolveSpec(ctx: CliContext, spec: string): SkillInfo[] {
-  if (spec === ROOT_SKILL) return [rootSkill()];
+  const core = coreSkills().find((s) => s.source === spec);
+  if (core) return [core];
 
   const [providerId, skillName, extra] = spec.split("/");
   if (!providerId || extra !== undefined) {
@@ -73,7 +88,7 @@ function resolveSpec(ctx: CliContext, spec: string): SkillInfo[] {
 
 async function list(ctx: CliContext, providerId: string | undefined, asJson: boolean): Promise<number> {
   const providerIds = providerId ? [providerId] : ctx.registry.list();
-  const rows: SkillInfo[] = [rootSkill()];
+  const rows: SkillInfo[] = providerId ? [rootSkill()] : coreSkills();
   for (const id of providerIds) {
     const provider = ctx.registry.load(id);
     rows.push(...providerSkills(provider.id, provider.dir));
@@ -96,7 +111,7 @@ async function list(ctx: CliContext, providerId: string | undefined, asJson: boo
 async function add(ctx: CliContext, args: string[], asJson: boolean): Promise<number> {
   const { specs, flags } = splitFlags(args);
   if (specs.length === 0) {
-    throw new UsageError("what to add? e.g. `mastro skills add depop` or `mastro skills add depop/search`");
+    throw new UsageError("what to add? e.g. `mastro skills add hackernews` or `mastro skills add mastro-author`");
   }
   const target = installTarget(flags);
 
@@ -193,6 +208,7 @@ function printHelp(): void {
 Usage:
   mastro skills list [provider]              List available skills
   mastro skills add <provider>[/<skill>]...  Install skills (+ the root mastro skill)
+  mastro skills add mastro-author            Install the connector-authoring skill
   mastro skills update                       Refresh installed skills in the target
 
 Target (for add/update):
@@ -201,7 +217,8 @@ Target (for add/update):
   --dir <path>     anywhere (e.g. .agents/skills)
 
 Examples:
-  mastro skills add depop
-  mastro skills add amazon/search amazon/detail --global
+  mastro skills add hackernews
+  mastro skills add mastro-author --global
+  mastro skills add myapp/search myapp/detail --dir .agents/skills
   mastro skills update`);
 }

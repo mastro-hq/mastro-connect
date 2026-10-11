@@ -9,19 +9,19 @@ import { join } from "node:path";
 
 import { AuthBroker, FileStore, ProviderRegistry, Receiver } from "../src/index.ts";
 
-const PROVIDERS_ROOT = join(import.meta.dir, "../../../providers");
+const PROVIDERS_ROOT = join(import.meta.dir, "fixtures/providers");
 const TMP = `/tmp/mastro-capture-test-${process.pid}`;
 
 afterEach(() => rmSync(TMP, { recursive: true, force: true }));
 
-test("broker captures, validates, and persists a Depop credential", async () => {
+test("broker captures, validates, and persists a credential", async () => {
   const registry = new ProviderRegistry([PROVIDERS_ROOT]);
   const store = new FileStore(TMP);
   const broker = new AuthBroker(store);
-  const depop = registry.load("depop");
+  const provider = registry.load("testapp");
 
   // Simulate the extension as soon as the bootstrap URL is live.
-  const capturePromise = broker.capture(depop, {
+  const capturePromise = broker.capture(provider, {
     onBootstrapUrl: async (url) => {
       const base = new URL(url).origin;
       const sessionId = url.split("/").pop()!;
@@ -29,7 +29,7 @@ test("broker captures, validates, and persists a Depop credential", async () => 
       // 1. Bootstrap page renders with the embedded session payload.
       const page = await fetch(url).then((r) => r.text());
       expect(page).toContain("mastro-session");
-      expect(page).toContain("Depop");
+      expect(page).toContain("TestApp");
 
       // 2. Extension posts the capture bundle (cookies → serialized fields).
       const res = await fetch(`${base}/api/browser-auth/captures/${sessionId}`, {
@@ -37,7 +37,7 @@ test("broker captures, validates, and persists a Depop credential", async () => 
         headers: { "content-type": "application/json", origin: "http://127.0.0.1" },
         body: JSON.stringify({
           schema_version: "capture-bundle/v1",
-          provider_id: "depop",
+          provider_id: "testapp",
           captured_at: Math.floor(Date.now() / 1000),
           credentials: { access_token: "tok-123", user_id: "42" },
           browser_context: { user_agent: "Mozilla/5.0 test", locale: "en-US" },
@@ -51,16 +51,16 @@ test("broker captures, validates, and persists a Depop credential", async () => 
   const credential = await capturePromise;
   expect(credential.fields.access_token).toBe("tok-123");
   expect(credential.fields.user_id).toBe("42");
-  expect(store.get("depop")?.fields.user_id).toBe("42");
+  expect(store.get("testapp")?.fields.user_id).toBe("42");
 });
 
 test("broker rejects a capture missing api-profile required fields", async () => {
   const registry = new ProviderRegistry([PROVIDERS_ROOT]);
   const store = new FileStore(TMP);
   const broker = new AuthBroker(store);
-  const depop = registry.load("depop");
+  const provider = registry.load("testapp");
 
-  const promise = broker.capture(depop, {
+  const promise = broker.capture(provider, {
     onBootstrapUrl: async (url) => {
       const base = new URL(url).origin;
       const sessionId = url.split("/").pop()!;
@@ -69,7 +69,7 @@ test("broker rejects a capture missing api-profile required fields", async () =>
         headers: { "content-type": "application/json", origin: "http://127.0.0.1" },
         body: JSON.stringify({
           schema_version: "capture-bundle/v1",
-          provider_id: "depop",
+          provider_id: "testapp",
           captured_at: Math.floor(Date.now() / 1000),
           credentials: { access_token: "tok-123" }, // missing user_id
         }),
@@ -89,7 +89,7 @@ function simulateCapture(url: string, credentials: Record<string, unknown>): Pro
     headers: { "content-type": "application/json", origin: "http://127.0.0.1" },
     body: JSON.stringify({
       schema_version: "capture-bundle/v1",
-      provider_id: "depop",
+      provider_id: "testapp",
       captured_at: Math.floor(Date.now() / 1000),
       credentials,
     }),
@@ -100,11 +100,11 @@ test("verify probe success is recorded on the credential", async () => {
   const registry = new ProviderRegistry([PROVIDERS_ROOT]);
   const store = new FileStore(TMP);
   const broker = new AuthBroker(store);
-  const depop = registry.load("depop"); // spec declares x-mastro-auth.verify
+  const provider = registry.load("testapp"); // spec declares x-mastro-auth.verify
 
   let probed = false;
   const credential = await broker.capture(
-    depop,
+    provider,
     { onBootstrapUrl: (url) => simulateCapture(url, { access_token: "t", user_id: "42" }) },
     {
       verify: async () => {
@@ -116,36 +116,36 @@ test("verify probe success is recorded on the credential", async () => {
 
   expect(probed).toBe(true);
   expect(credential.validation).toEqual({ ok: true, checked_at: 123 });
-  expect(store.get("depop")?.validation?.ok).toBe(true);
+  expect(store.get("testapp")?.validation?.ok).toBe(true);
 });
 
 test("a failed verify probe rejects login but persists the failure for status", async () => {
   const registry = new ProviderRegistry([PROVIDERS_ROOT]);
   const store = new FileStore(TMP);
   const broker = new AuthBroker(store);
-  const depop = registry.load("depop");
+  const provider = registry.load("testapp");
 
   const promise = broker.capture(
-    depop,
+    provider,
     { onBootstrapUrl: (url) => simulateCapture(url, { access_token: "t", user_id: "42" }) },
     { verify: async () => ({ ok: false, checked_at: 1, detail: "HTTP 401" }) },
   );
 
   await expect(promise).rejects.toThrow(/test call failed.*HTTP 401/s);
   // The failed result is still stored, so `mastro status` can show it.
-  expect(store.get("depop")?.validation).toEqual({ ok: false, checked_at: 1, detail: "HTTP 401" });
+  expect(store.get("testapp")?.validation).toEqual({ ok: false, checked_at: 1, detail: "HTTP 401" });
 });
 
 test("receiver rejects a capture from a disallowed origin", async () => {
   const registry = new ProviderRegistry([PROVIDERS_ROOT]);
-  const depop = registry.load("depop");
+  const provider = registry.load("testapp");
 
   // Drive the receiver directly so we don't depend on the broker's long timeout.
   const receiver = new Receiver({
-    providerId: depop.id,
-    displayName: depop.manifest.display_name,
-    launchUrl: depop.manifest.launch.url,
-    manifest: depop.manifest,
+    providerId: provider.id,
+    displayName: provider.manifest.display_name,
+    launchUrl: provider.manifest.launch.url,
+    manifest: provider.manifest,
   });
   const url = receiver.start();
   try {
@@ -153,7 +153,7 @@ test("receiver rejects a capture from a disallowed origin", async () => {
     const res = await fetch(`${base}/api/browser-auth/captures/${receiver.sessionId}`, {
       method: "POST",
       headers: { "content-type": "application/json", origin: "https://evil.example.com" },
-      body: JSON.stringify({ provider_id: "depop", credentials: {}, captured_at: 1 }),
+      body: JSON.stringify({ provider_id: "testapp", credentials: {}, captured_at: 1 }),
     });
     expect(res.status).toBe(403);
     expect(receiver.getStatus().status).toBe("error");
@@ -164,12 +164,12 @@ test("receiver rejects a capture from a disallowed origin", async () => {
 
 test("receiver accepts a capture from the extension's chrome-extension:// origin", async () => {
   const registry = new ProviderRegistry([PROVIDERS_ROOT]);
-  const depop = registry.load("depop");
+  const provider = registry.load("testapp");
   const receiver = new Receiver({
-    providerId: depop.id,
-    displayName: depop.manifest.display_name,
-    launchUrl: depop.manifest.launch.url,
-    manifest: depop.manifest,
+    providerId: provider.id,
+    displayName: provider.manifest.display_name,
+    launchUrl: provider.manifest.launch.url,
+    manifest: provider.manifest,
   });
   const url = receiver.start();
   try {
@@ -181,7 +181,7 @@ test("receiver accepts a capture from the extension's chrome-extension:// origin
       headers: { "content-type": "application/json", origin: "chrome-extension://deadbeef" },
       body: JSON.stringify({
         schema_version: "capture-bundle/v1",
-        provider_id: "depop",
+        provider_id: "testapp",
         captured_at: Math.floor(Date.now() / 1000),
         credentials: { access_token: "t", user_id: "1", cookie_header: "a=b" },
       }),

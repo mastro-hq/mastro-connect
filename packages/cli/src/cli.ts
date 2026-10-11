@@ -7,7 +7,8 @@
  *   mastro providers [...]       list / fetch / refresh connectors
  *   mastro skills [...]          install agent skills for connectors
  *   mastro extension [...]       install the browser extension
- *   mastro <provider> <command>  call a connector's unofficial API
+ *   mastro validate <dir|id>     check a connector definition
+ *   mastro <provider> <command>  call a connector's API
  *
  * Built-in verbs are handled directly; anything else is treated as a provider
  * id and dispatched dynamically from that provider's OpenAPI operations.
@@ -19,6 +20,7 @@ import { status } from "./commands/status.ts";
 import { providers } from "./commands/providers.ts";
 import { skills } from "./commands/skills.ts";
 import { extension } from "./commands/extension.ts";
+import { validate } from "./commands/validate.ts";
 import { runConnector } from "./commands/connector.ts";
 import { jsonMode, ui } from "./output.ts";
 import { VERSION } from "./version.ts";
@@ -52,6 +54,8 @@ export async function run(argv: string[]): Promise<number> {
       return skills(ctx, rest, asJson);
     case "extension":
       return extension(ctx, rest, asJson);
+    case "validate":
+      return validate(ctx, rest, asJson);
     default:
       // Treat `command` as a provider id: `mastro depop search ...`
       return runConnector(ctx, command, rest, asJson);
@@ -87,17 +91,19 @@ function exitCodeOf(err: unknown): number {
 }
 
 function printHelp(): void {
-  ui.print(`mastro — unofficial connectors for web apps, for agents and humans.
+  ui.print(`mastro — connectors for web apps, for agents and humans.
 
 Usage:
   mastro login <provider>        Capture a browser session for a connector
   mastro logout <provider>       Forget a stored session
   mastro status                  Show logged-in connectors
   mastro providers               List available connectors
-  mastro providers add <id>      Fetch a connector's latest definition from GitHub
+  mastro providers add <id>      Fetch a connector from a GitHub repo (--repo owner/name)
   mastro skills add <id>         Install a connector's agent skills (.claude/skills)
+  mastro skills add mastro-author  Install the skill for building new connectors
+  mastro validate <dir|id>       Check a connector definition
   mastro extension install       Install the browser extension (needed for login)
-  mastro <provider> <command>    Call a connector's unofficial API
+  mastro <provider> <command>    Call a connector's API
   mastro <provider> --help       Show a connector's commands
 
 Global flags:
@@ -105,7 +111,8 @@ Global flags:
   --version, -v                  Print version
 
 Examples:
-  mastro login depop
-  mastro depop search "carhartt jacket" --conditions used_good --sizes M
-  mastro skills add depop --global`);
+  mastro hackernews top --limit 5
+  mastro providers add myapp --repo you/connectors
+  mastro login myapp
+  mastro skills add mastro-author --global`);
 }

@@ -26,7 +26,8 @@ export class ProviderNotFoundError extends Error {
   constructor(public readonly providerId: string, public readonly searched: string[]) {
     super(
       `Unknown provider "${providerId}". Searched:\n  ${searched.join("\n  ")}\n` +
-        `Run \`mastro providers\` to list available connectors.`,
+        `Run \`mastro providers\` to list installed connectors, or ` +
+        `\`mastro providers add ${providerId} --repo <owner>/<repo>\` to fetch one.`,
     );
     this.name = "ProviderNotFoundError";
   }

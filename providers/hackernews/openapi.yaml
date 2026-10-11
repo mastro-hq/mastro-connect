@@ -1,0 +1,78 @@
+openapi: 3.1.0
+info:
+  title: Hacker News API
+  version: v0
+  description: >
+    The example connector that ships with mastro. It wraps Hacker News's
+    official, public, read-only API (https://github.com/HackerNews/API), so it
+    runs with no login and no browser. Read it next to docs/AUTHORING.md: it
+    shows plain operations with path/query parameters, `security: []` public
+    operations, a hidden helper operation, and a `foreach` workflow.
+
+servers:
+  - url: https://hacker-news.firebaseio.com
+
+x-mastro-replay:
+  retry_on: [429, 503]
+  rate_limit:
+    requests_per_minute: 120
+
+paths:
+  /v0/item/{id}.json:
+    get:
+      operationId: item
+      summary: A story, comment, job, or poll by id
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Item id (e.g. 8863)
+          schema: { type: integer }
+
+  /v0/user/{id}.json:
+    get:
+      operationId: user
+      summary: A user's public profile (karma, about, submissions)
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Username (case-sensitive)
+          schema: { type: string }
+
+  # Hidden helper: the ranked id list. `top` below turns ids into stories.
+  /v0/topstories.json:
+    get:
+      operationId: topIds
+      x-mastro-hidden: true
+      security: []
+      parameters:
+        - name: orderBy
+          in: query
+          schema: { type: string }
+        - name: limitToFirst
+          in: query
+          schema: { type: integer }
+
+  /x-mastro/top:
+    get:
+      operationId: top
+      summary: The current front page, as full story objects
+      security: []
+      x-mastro-args:
+        - { name: limit, description: "How many stories (default 10)" }
+      x-mastro-workflow:
+        result: stories
+        steps:
+          - id: ids
+            operationId: topIds
+            request:
+              # Firebase REST: order by key and keep the first N ids.
+              url: "https://hacker-news.firebaseio.com/v0/topstories.json?orderBy=%22%24key%22&limitToFirst=${args.limit|10}"
+          - id: stories
+            operationId: item
+            foreach: "${steps.ids}"
+            request:
+              url: "https://hacker-news.firebaseio.com/v0/item/${item}.json"

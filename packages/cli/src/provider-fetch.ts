@@ -1,12 +1,16 @@
 /**
- * Fetching providers out-of-band from the mastro-connect GitHub repo.
+ * Fetching providers out-of-band from a connector repo on GitHub.
  *
- * Unofficial APIs drift faster than CLI releases, so `mastro providers add`
- * pulls the latest `providers/<id>/` straight from the repo into
- * `~/.mastro/providers/<id>` (which the registry searches ahead of the
- * bundled copies). Every fetch is pinned to the commit it resolved, recorded
- * in `~/.mastro/providers/.lock.json` so `mastro providers update` can
- * re-fetch from the same repo/ref later.
+ * Connectors live outside the framework (default: the mastro-hq/connectors
+ * repo; `--repo` points anywhere else) and drift faster than CLI releases, so
+ * `mastro providers add` pulls the latest `providers/<id>/` straight from the
+ * repo into `~/.mastro/providers/<id>` (which the registry searches ahead of
+ * the bundled copies). Every fetch is pinned to the commit it resolved,
+ * recorded in `~/.mastro/providers/.lock.json` so `mastro providers update`
+ * can re-fetch from the same repo/ref later.
+ *
+ * Connector repos may be private: every call goes through api.github.com with
+ * a token from GITHUB_TOKEN / GH_TOKEN, else `gh auth token`, when one exists.
  */
 import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -14,7 +18,7 @@ import { dirname, join } from "node:path";
 import { UsageError } from "./args.ts";
 import { userProvidersDir } from "./context.ts";
 
-export const DEFAULT_REPO = "mastro-hq/mastro-connect";
+export const DEFAULT_REPO = "mastro-hq/connectors";
 export const DEFAULT_REF = "main";
 
 export interface ProviderLockEntry {
@@ -136,20 +140,65 @@ async function listTree(repo: string, commit: string): Promise<string[]> {
 }
 
 async function download(repo: string, commit: string, path: string): Promise<Uint8Array> {
-  const res = await fetch(`https://raw.githubusercontent.com/${repo}/${commit}/${path}`, {
-    headers: { "User-Agent": "mastro-connect" },
+  const encoded = path.split("/").map(encodeURIComponent).join("/");
+  const res = await github(`https://api.github.com/repos/${repo}/contents/${encoded}?ref=${commit}`, {
+    Accept: "application/vnd.github.raw",
   });
   if (!res.ok) throw new FetchError(`download failed (${res.status}) for ${path}`);
   return new Uint8Array(await res.arrayBuffer());
 }
 
 async function getJson(url: string): Promise<unknown> {
-  const res = await fetch(url, {
-    headers: { "User-Agent": "mastro-connect", Accept: "application/vnd.github+json" },
-  });
+  const res = await github(url, { Accept: "application/vnd.github+json" });
+  if (res.status === 404) {
+    throw new FetchError(
+      githubToken()
+        ? `GitHub returned 404 for ${url} — check the repo/ref, and that your token can read the repo.`
+        : `GitHub returned 404 for ${url} — if the repo is private, set GITHUB_TOKEN or run \`gh auth login\`.`,
+    );
+  }
+  if (res.status === 401) {
+    throw new FetchError("GitHub rejected the token (401) — refresh GITHUB_TOKEN / `gh auth login`.");
+  }
   if (res.status === 403 || res.status === 429) {
-    throw new FetchError("GitHub API rate limit hit — try again in a few minutes.");
+    throw new FetchError(
+      githubToken()
+        ? "GitHub API rate limit hit — try again in a few minutes."
+        : "GitHub API rate limit hit — set GITHUB_TOKEN or run `gh auth login` for a higher limit.",
+    );
   }
   if (!res.ok) throw new FetchError(`GitHub API error ${res.status} for ${url}`);
   return res.json();
+}
+
+function github(url: string, headers: Record<string, string>): Promise<Response> {
+  const token = githubToken();
+  return fetch(url, {
+    headers: {
+      "User-Agent": "mastro-connect",
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...headers,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+}
+
+let cachedToken: string | null | undefined;
+
+/** GITHUB_TOKEN / GH_TOKEN, else the GitHub CLI's token, else none (public repos only). */
+function githubToken(): string | undefined {
+  if (cachedToken === undefined) {
+    cachedToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || ghCliToken() || null;
+  }
+  return cachedToken ?? undefined;
+}
+
+function ghCliToken(): string | undefined {
+  try {
+    const proc = Bun.spawnSync(["gh", "auth", "token"], { stdout: "pipe", stderr: "ignore" });
+    const token = proc.stdout.toString().trim();
+    return proc.success && token ? token : undefined;
+  } catch {
+    return undefined; // gh not installed
+  }
 }

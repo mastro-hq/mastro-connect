@@ -1,0 +1,13 @@
+openapi: 3.1.0
+info: { title: TestApp (test fixture), version: "1" }
+servers:
+  - url: https://www.testapp.example
+x-mastro-auth:
+  required_fields: [access_token, user_id]
+  verify: { operationId: me }
+  headers:
+    authorization: "Bearer ${auth.access_token}"
+paths:
+  /api/me:
+    get:
+      operationId: me

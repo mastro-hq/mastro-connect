@@ -58,6 +58,7 @@ async function writeAll(fd: number, bytes: Buffer): Promise<void> {
     try {
       offset += writeSync(fd, bytes, offset);
     } catch (err) {
+      if (isErrno(err, "EPIPE")) return; // reader went away (`| head`) — nothing left to do
       if (!isErrno(err, "EAGAIN")) throw err;
       await Bun.sleep(2); // the reader hasn't drained the pipe yet
     }

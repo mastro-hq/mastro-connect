@@ -1,7 +1,7 @@
 # Multi-step workflows (`x-mastro-workflow`)
 
 OpenAPI describes single request/response operations. Some connector commands
-are *stateful sequences* — e.g. Depop's "list an item": upload each photo, PUT
+are *stateful sequences* — e.g. "list an item for sale": upload each photo, PUT
 the bytes to a presigned URL, poll until processed, then create the listing,
 with the numeric picture ids (derived from the upload slots) feeding the final
 body.
@@ -69,17 +69,22 @@ Each step calls an operation (`operationId`) and stores its result under
   `application/x-www-form-urlencoded` body by replaying an HTML `<form>` from a
   prior step's response. `html` is a template (usually `"${steps.<id>}"`),
   `selector` picks the form (first match only — `querySelector` semantics, so
-  duplicate-id pages like Amazon's buy boxes work), `set` overrides/adds fields
+  duplicate-id pages work), `set` overrides/adds fields
   (the clicked submit button, a JS-set flag), `unset` drops fields. The form is
   serialized exactly as a browser would submit it (named non-button controls,
   checked boxes only, selected option, textarea text), which captures a
   server-rendered CSRF token and hidden fields verbatim. Use for state changes
-  gated behind a form (Amazon Buy Now → place-order). Mutually exclusive with
+  gated behind a form (a checkout's place-order). Mutually exclusive with
   `body`.
 - **`output: { path, extract, coerce }`** — keep `response.<path>`; `extract`
   runs a regex and keeps the first capture group (e.g. pull a picture id from an
   S3 URL); `coerce: number` parses a numeric string into a JS number (so a later
   body sends it as a JSON number, not a string).
+- **`fail_when: [<template>, ...]`** — fail the step when any template
+  resolves truthy; the resolved text becomes the error. For APIs that answer
+  HTTP 200 with an in-band error (`{"Response":2,"Message":"…"}`,
+  `Result.ErrorMessage`). Like `poll.until`, evaluated against the step's
+  **raw** response (`${steps.<id>.Message}`).
 - **transform step (no `operationId`)** — makes no HTTP call; shapes its `value`
   (templated, defaults to the foreach `${item}`) through `output`. Use to derive
   data from a prior step — e.g. map slot URLs to numeric picture ids — without a
@@ -94,6 +99,29 @@ Each step calls an operation (`operationId`) and stores its result under
 
 The workflow's `result:` names the step whose response the command returns (or a
 dotted path into it, e.g. `createListing.slug`).
+
+## Handing off to the browser
+
+Some flows can be staged by the CLI but must be finished by a person — a
+hosted card form, a captcha. `handoff` (next to `steps`) runs after every step
+succeeded: the extension writes `local_storage` on the URL's origin (in the
+user's tab there, or a new one), then opens the URL and focuses it.
+
+```yaml
+x-mastro-workflow:
+  steps: [...]                       # lock → pre-cart → add to cart
+  handoff:
+    url: https://www.example.com/cart
+    local_storage:
+      shoppingCartKey: "${steps.addToCart.Result.ShoppingCartKey}"
+```
+
+Needs the mastro extension. Under `--dry-run` the rendered handoff is listed
+in the plan instead of performed.
+
+Each step's request also honours its operation's own `servers`,
+`security: []` (no auth headers) and `x-mastro-transport`; a step's
+`request.transport` / `no_auth` still win.
 
 ## Templates available in a workflow
 
@@ -122,10 +150,10 @@ variant yields `{}`).
 just live endpoints. With `keyed: true` it's a key→entry lookup; with
 `key_template` the key is built from *other* args. This keeps reference-data
 transforms (category → size set, department → gender) declarative — no
-per-provider code. See `providers/depop/reference/`.
+per-provider code. Bundle the data under `providers/<id>/reference/`.
 
 Derived args resolve in declaration order, so a `key_template` can reference an
-earlier-derived arg. Depop chains two lookups for the size variant:
+earlier-derived arg — e.g. two chained lookups for a size variant:
 `(department/type) → variant-set`, then `(variant-set/size) → variant` (the
 member id within the set), which becomes the `variants` map on the listing.
 

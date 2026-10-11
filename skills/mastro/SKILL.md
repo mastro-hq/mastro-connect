@@ -1,17 +1,18 @@
 ---
 name: mastro
-description: Core conventions for the mastro CLI — unofficial connectors that let agents drive web apps (Depop, Amazon, …) through reverse-engineered APIs replayed with the user's own browser session. Read this before using any mastro provider command, or when the user mentions mastro, asks to log in to a connector, or a mastro command fails with an auth error.
+description: Core conventions for the mastro CLI — connectors that let agents drive web apps through the apps' own APIs, replayed with the user's own browser session. Read this before using any mastro provider command, or when the user mentions mastro, asks to log in to a connector, or a mastro command fails with an auth error.
 ---
 
-# mastro — unofficial connectors for web apps
+# mastro — connectors for web apps
 
-`mastro` replays a captured browser session against a web app's unofficial
-API, so you can search/read/act on sites that have no public API. Each site is
-a **provider** (`depop`, `amazon`, …) and each provider exposes subcommands
+`mastro` replays a captured browser session against a web app's own API, so
+you can search/read/act on apps for the user without driving a browser UI.
+Each app is
+a **provider** (e.g. `hackernews`) and each provider exposes subcommands
 generated from its spec.
 
 If `mastro` is not on PATH, invoke every command as `npx -y mastro-connect`
-instead (e.g. `npx -y mastro-connect depop search "…" --json`).
+instead (e.g. `npx -y mastro-connect hackernews top --json`).
 
 ## The session model
 
@@ -52,3 +53,13 @@ Detailed playbooks ship with each provider. Install them next to this skill:
 mastro skills add <provider>            # all of a provider's skills
 mastro skills add <provider>/<skill>    # one skill
 ```
+
+## Missing a connector?
+
+- `mastro providers --json` shows what's installed. Connectors not bundled
+  with mastro come from a connector repo:
+  `mastro providers add <id> --repo <owner>/<repo>` (private repos use
+  `GITHUB_TOKEN` or the user's `gh` login).
+- No connector exists for the app? The `mastro-author` skill builds one
+  (`mastro skills add mastro-author`). Ask the user before starting — it needs
+  them logged in and clicking through the app once.

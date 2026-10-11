@@ -24,7 +24,7 @@ import { emit, pc, ui } from "../output.ts";
  * request's parameters plus any x-mastro-args (template-only flags that feed
  * x-mastro-body / x-mastro-headers without also landing in the URL).
  */
-function flagsFor(op: OperationView): CliFlag[] {
+export function flagsFor(op: OperationView): CliFlag[] {
   const args = (op.operation["x-mastro-args"] ?? []).map(flagFromWorkflowArg);
   if (op.isWorkflow) return args;
   return [...op.parameters.map(flagFromParameter), ...args];

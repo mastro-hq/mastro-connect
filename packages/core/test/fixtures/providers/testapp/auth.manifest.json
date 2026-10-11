@@ -1,0 +1,40 @@
+{
+  "schema_version": "browser-auth-manifest/v1",
+  "provider_id": "testapp",
+  "display_name": "TestApp",
+  "launch": {
+    "url": "https://www.testapp.example/",
+    "open_tab": true,
+    "expected_origins": ["https://www.testapp.example"],
+    "timeout_seconds": 180
+  },
+  "permissions": {
+    "host_permissions": ["https://www.testapp.example/*"],
+    "observes_cookies": true,
+    "observes_request_headers": false,
+    "observes_request_body": false,
+    "observes_response_headers": false,
+    "injects_page_bridge": false,
+    "observes_storage": false
+  },
+  "capture": {
+    "cookies": [
+      { "url": "https://www.testapp.example", "include_names_matching": [".*"], "save_as": "cookies" }
+    ]
+  },
+  "completion": {
+    "all": [{ "cookie_present": "access_token" }, { "cookie_present": "user_id" }]
+  },
+  "serialization": {
+    "output_schema": "capture-bundle/testapp-web/v1",
+    "fields": {
+      "access_token": "${cookies.access_token.value}",
+      "user_id": "${cookies.user_id.value}"
+    }
+  },
+  "security": {
+    "redact_fields": ["access_token"],
+    "persist_minimum": true,
+    "allowed_postback_origin": "http://127.0.0.1"
+  }
+}

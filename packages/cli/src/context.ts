@@ -20,28 +20,29 @@ export function userProvidersDir(): string {
 }
 
 /**
- * The installed package root — the directory that ships `providers/` and
- * `skills/`. Found by walking up from this module, so it works both from the
- * repo (packages/cli/src/) and from the published bundle (dist/).
+ * The installed package root — the directory that ships `skills/` (and the
+ * bundled example `providers/`). Found by walking up from this module, so it
+ * works both from the repo (packages/cli/src/) and from the published bundle
+ * (dist/).
  */
 export function packageRoot(): string {
   let dir = dirname(fileURLToPath(import.meta.url));
   for (let depth = 0; depth < 6; depth++) {
-    if (existsSync(join(dir, "providers")) && existsSync(join(dir, "package.json"))) {
+    if (existsSync(join(dir, "skills")) && existsSync(join(dir, "package.json"))) {
       return dir;
     }
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
-  throw new Error("mastro install is broken: cannot locate the bundled providers/ directory.");
+  throw new Error("mastro install is broken: cannot locate the bundled skills/ directory.");
 }
 
 /**
  * Provider search roots, in priority order:
  *   1. $MASTRO_PROVIDERS (colon-separated) — explicit overrides
  *   2. ~/.mastro/providers — fetched via `mastro providers add`
- *   3. the package's bundled `providers/` directory
+ *   3. the package's bundled `providers/` directory (the example connector)
  */
 function providerRoots(): string[] {
   const env = process.env.MASTRO_PROVIDERS;

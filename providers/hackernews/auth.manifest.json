@@ -1,18 +1,15 @@
 {
   "schema_version": "browser-auth-manifest/v1",
-  "provider_id": "depop",
-  "display_name": "Depop",
+  "provider_id": "hackernews",
+  "display_name": "Hacker News (example)",
   "launch": {
-    "url": "https://www.depop.com/",
+    "url": "https://news.ycombinator.com/",
     "open_tab": true,
-    "expected_origins": ["https://www.depop.com"],
+    "expected_origins": ["https://news.ycombinator.com"],
     "timeout_seconds": 180
   },
   "permissions": {
-    "host_permissions": [
-      "https://www.depop.com/*",
-      "https://webapi.depop.com/*"
-    ],
+    "host_permissions": ["https://news.ycombinator.com/*"],
     "observes_cookies": true,
     "observes_request_headers": false,
     "observes_request_body": false,
@@ -23,28 +20,23 @@
   "capture": {
     "cookies": [
       {
-        "url": "https://www.depop.com",
-        "include_names_matching": [".*"],
+        "url": "https://news.ycombinator.com",
+        "include_names_matching": ["^user$"],
         "save_as": "cookies"
       }
     ]
   },
   "completion": {
-    "all": [
-      { "cookie_present": "access_token" },
-      { "cookie_present": "user_id" }
-    ]
+    "all": [{ "cookie_present": "user" }]
   },
   "serialization": {
-    "output_schema": "capture-bundle/depop-web/v1",
+    "output_schema": "capture-bundle/hackernews-web/v1",
     "fields": {
-      "access_token": "${cookies.access_token.value}",
-      "user_id": "${cookies.user_id.value}",
       "cookie_header": "${cookies.as_header}"
     }
   },
   "security": {
-    "redact_fields": ["access_token", "cookie_header"],
+    "redact_fields": ["cookie_header"],
     "persist_minimum": true,
     "allowed_postback_origin": "http://127.0.0.1"
   }

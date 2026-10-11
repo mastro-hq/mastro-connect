@@ -2,7 +2,7 @@
  * `mastro providers` — list, fetch, and refresh connectors.
  *
  *   mastro providers                 list available connectors
- *   mastro providers add <id>...     fetch latest from GitHub into ~/.mastro/providers
+ *   mastro providers add <id>...     fetch latest from a GitHub connector repo into ~/.mastro/providers
  *   mastro providers update [id...]  re-fetch previously added providers
  */
 import { UsageError } from "../args.ts";
@@ -46,7 +46,7 @@ async function list(ctx: CliContext, asJson: boolean): Promise<number> {
   }
 
   if (rows.length === 0) {
-    ui.info("No providers found. Add one under providers/<name>/.");
+    ui.info("No providers found. Fetch one with `mastro providers add <id> --repo owner/name`, or build one (`mastro skills add mastro-author`).");
     return 0;
   }
 
@@ -63,7 +63,7 @@ async function list(ctx: CliContext, asJson: boolean): Promise<number> {
 async function add(args: string[], asJson: boolean): Promise<number> {
   const { ids, repo, ref } = parseFetchArgs(args);
   if (ids.length === 0) {
-    throw new UsageError("which provider? e.g. `mastro providers add depop`");
+    throw new UsageError("which provider? e.g. `mastro providers add myapp --repo you/connectors`");
   }
   const results = [];
   for (const id of ids) {

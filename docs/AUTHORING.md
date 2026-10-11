@@ -36,11 +36,18 @@ OpenAPI):
 | Extension | Problem it solves |
 | --- | --- |
 | `x-mastro-auth` (root) | How a captured credential becomes a live request: header/cookie templates, and **per-request generated values** (`${uuid}`, `${now}`). OpenAPI `securityScheme` only names the credential, never how to mint it. |
-| `x-mastro-resolve` (on a parameter) | **Dynamic enums**: valid values come from *another operation's response* (e.g. Depop's sizes/brands taxonomies), not a static list. JSON Schema `enum` is static literals only. |
-| `x-mastro-replay` (root) | Transport tuning OpenAPI doesn't model: browser impersonation (Cloudflare JA3), retry/recapture status codes, rate limit, following HTML meta-refresh bot walls (Akamai bm-verify → `follow_html_refresh`). |
-| `x-mastro-extract` (on an operation) | **HTML-only responses**: some sites have no JSON API at all (Amazon search/detail) — the data exists only server-rendered. An `items` CSS selector plus per-field selectors/attributes turn the page into an array of flat objects; omit `items` for **single-object mode** (a detail page → one object). Field selectors must not match nested elements within one item. |
-| `x-mastro-form` (on a workflow step's `request`) | **Form-gated state changes**: a POST guarded by a server-rendered `<form>` with a one-time CSRF token + many hidden fields (Amazon Buy Now → place-order). Point at the form in a prior step's HTML; it's serialized exactly as a browser would submit it (FormData semantics, first matching form only), with `set`/`unset` for the fields submission adds. |
+| `x-mastro-resolve` (on a parameter) | **Dynamic enums**: valid values come from *another operation's response* (e.g. an app's sizes/brands taxonomies), not a static list. JSON Schema `enum` is static literals only. |
+| `x-mastro-replay` (root) | Transport tuning OpenAPI doesn't model: running in the user's browser tab (`via_browser`), TLS impersonation, retry/recapture status codes, rate limit, following HTML meta-refresh interstitials (`follow_html_refresh`). |
+| `x-mastro-extract` (on an operation) | **HTML-only responses**: some sites have no JSON API at all — the data exists only server-rendered. `format: flight` does the same for React Server Components streams. An `items` CSS selector plus per-field selectors/attributes turn the page into an array of flat objects; omit `items` for **single-object mode** (a detail page → one object). A field's `pattern` keeps a regex capture (an id out of an href); a **list field** (`each` + `fields`) yields one flat object per repeated sub-element (an order's line items). Field selectors must not match nested elements within one item. |
+| `x-mastro-form` (on a workflow step's `request`) | **Form-gated state changes**: a POST guarded by a server-rendered `<form>` with a one-time CSRF token + many hidden fields (a checkout's place-order). Point at the form in a prior step's HTML; it's serialized exactly as a browser would submit it (FormData semantics, first matching form only), with `set`/`unset` for the fields submission adds. |
 | `x-mastro-command` / `x-mastro-result` / `x-mastro-hidden` (on an operation) | CLI projection: the subcommand name, the response path to pretty-print, and hiding metadata-only endpoints. |
+| `x-mastro-transport` (on an operation) | Force one operation's transport — `direct` (plain fetch) or `browser` (extension proxy) — e.g. a public search host inside a `via_browser` spec. |
+| `x-mastro-body` + `x-mastro-args` (on an operation) | A templated JSON body for a single request; `x-mastro-args` declares the flags it reads (`${args.*}`) without also putting them in the URL. |
+
+Plain OpenAPI covers two more cases: an operation-level **`servers`** for an
+app that splits its API across hosts (a public search host + an authed
+booking host), and **`security: []`** for a public operation — sent
+without the credential, and callable before `mastro login`.
 
 > Don't invent human-friendly aliases. Flags and their allowed values are
 > **whatever the API supports**, read straight from the spec. `x-mastro-resolve`
@@ -57,8 +64,9 @@ Open the app logged-in, open DevTools → Network, do the action you want
   `HttpOnly` cookies (page JS can't read them, but the extension's
   `chrome.cookies` can).
 - **Base origin** + exact path, query params, and which headers matter.
-- **Anti-bot** — Cloudflare/Akamai? (a `403` HTML page to a non-browser client
-  is the tell) → set `x-mastro-replay.impersonate_browser`.
+- **Browser-only?** — a `403` HTML page or a 302-to-self for a non-browser
+  client while the browser succeeds → set `x-mastro-replay.via_browser` so
+  requests run in the user's own tab. Never solve challenges or CAPTCHAs.
 - **Filter taxonomies** — does the app fetch its filter options from dedicated
   endpoints (sizes, brands, categories)? Those become `x-mastro-resolve`
   sources.
@@ -70,7 +78,8 @@ Save a **redacted** HAR for your notes. Never commit unredacted captures.
 ## 2. Write `auth.manifest.json`
 
 Declares what the extension captures and when it's done. (Unchanged by the
-OpenAPI switch — this is the browser half.) See `providers/depop` and the
+OpenAPI switch — this is the browser half.) See `providers/hackernews`,
+`skills/mastro-author/reference.md`, and the
 manifest schema in `packages/core/src/schemas/`.
 
 The serialized fields become the credential the OpenAPI `x-mastro-auth` consumes
