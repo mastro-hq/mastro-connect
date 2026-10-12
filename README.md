@@ -4,13 +4,17 @@
 
 **Turn your browser session into a CLI for any web app — so your agent can use it through the app's own API instead of clicking.**
 
+<img src="https://raw.githubusercontent.com/mastro-hq/mastro-connect/main/.github/assets/race.gif" alt="Side by side: a browser agent clicks, types and screenshots its way through a campsite search, while mastro runs one command and returns structured JSON in 0.26 seconds." width="900">
+
+<sub>Same task, same clock. The browser agent is an illustration; the mastro command and output are real.</sub>
+
 ```bash
 npx mastro-connect hackernews top --limit 5            # no install, no login
 npx mastro-connect reservecalifornia parks "big sur"   # campsite search
 npx mastro-connect setup                               # pick connectors, extension, agent skills
 ```
 
-[Give it to your agent](#give-it-to-your-agent) · [Try it](#try-it) · [How it works](#how-it-works) · [Security](#security--privacy) · [Build a connector](#building-a-connector) · [Agent skills](#agent-skills) · [Why a CLI](#why-a-cli) · [Docs](#documentation)
+[**trymastro.com**](https://trymastro.com) · [Give it to your agent](#give-it-to-your-agent) · [Try it](#try-it) · [How it works](#how-it-works) · [Security](#security--privacy) · [Build a connector](#building-a-connector) · [Agent skills](#agent-skills) · [Why a CLI](#why-a-cli) · [Docs](#documentation)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
 [![npm](https://img.shields.io/npm/v/mastro-connect?color=black)](https://www.npmjs.com/package/mastro-connect)
