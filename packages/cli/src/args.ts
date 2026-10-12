@@ -34,7 +34,8 @@ export function flagFromParameter(p: Parameter): CliFlag {
   return {
     name: p.name,
     description: p.description,
-    required: p.required ?? false,
+    // A parameter the spec defaults (e.g. `${auth.user_id}`) needn't be passed.
+    required: (p.required ?? false) && p.schema?.default === undefined,
     multiple: p.schema?.type === "array",
     boolean: p.schema?.type === "boolean",
     enum: (p.schema?.enum ?? p.schema?.items?.enum)?.map(String),

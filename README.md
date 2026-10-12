@@ -2,18 +2,18 @@
 
 # mastro&nbsp;·&nbsp;connect
 
-**Build agent connectors for the web apps you use. Describe the app's API as data, and drive it from the terminal.**
+**Turn your browser session into a CLI for any web app — so your agent can use it through the app's own API instead of clicking.**
 
 ```bash
-npx mastro-connect hackernews top --limit 5           # installs the connector on first use
-npx mastro-connect reservecalifornia parks "big sur"  # campsite search, no login
-npx mastro-connect setup                              # pick connectors, extension, agent skills
+npx mastro-connect hackernews top --limit 5            # no install, no login
+npx mastro-connect reservecalifornia parks "big sur"   # campsite search
+npx mastro-connect setup                               # pick connectors, extension, agent skills
 ```
 
-[Concept](#the-idea) · [Quickstart](#quickstart) · [How it works](#how-it-works) · [Build a connector](#building-a-connector) · [Agent skills](#agent-skills) · [Docs](#documentation) · [Ethics](#ethics--scope)
+[Try it](#try-it) · [How it works](#how-it-works) · [Security](#security--privacy) · [Build a connector](#building-a-connector) · [Agent skills](#agent-skills) · [Why a CLI](#why-a-cli) · [Docs](#documentation)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
-![Bun](https://img.shields.io/badge/runtime-Bun-black)
+[![npm](https://img.shields.io/npm/v/mastro-connect?color=black)](https://www.npmjs.com/package/mastro-connect)
 ![OpenAPI 3.1](https://img.shields.io/badge/spec-OpenAPI%203.1-black)
 
 </div>
@@ -26,100 +26,83 @@ Agents increasingly act on the web for their users, mostly by driving a
 browser click by click: slow, brittle, and expensive. But the web app you're
 logged into already talks to its own backend through a perfectly good API.
 **mastro lets you describe that API once and turn your existing session into
-clean, agent-ready commands.**
+clean, agent-ready commands** — JSON in, JSON out, from your own machine.
 
-It does three things:
+1. **Capture** — a small Chrome extension reads the session your browser
+   already holds. No passwords typed, no scraping.
+2. **Store** — only the minimal credential, locally, bound to the sites you
+   logged in to.
+3. **Replay** — each endpoint becomes a `mastro <app> <command>` with flags,
+   help, and `--json`, sent from your machine or through your own browser tab.
 
-1. **Captures** your existing browser session through a small Chrome extension (no
-   passwords typed, no scraping — it reads the auth your browser already holds).
-2. **Stores** only the minimal credential needed to replay requests, locally.
-3. **Replays** that session against the app's own API, exposing each endpoint as
-   a CLI command — JSON in, JSON out — from your machine, optionally through your
-   own browser tab.
-
-The headline feature: **a connector is data, not code.** You describe an app's
-API as a standard **OpenAPI 3.1 document** (plus a few `x-mastro-*` extensions
-for the things OpenAPI can't express) and a capture manifest, and the same rails
-handle login, command dispatch, filters, pagination, and multi-step flows. And
-because it's data, **an agent can write one**: the bundled `mastro-author` skill
-walks it from capture to a validated connector.
-
-> **Why "mastro"?** In Italian a _mastro_ is the master of a craft — the
-> _mastro falegname_ (master carpenter), the expert who's earned the title.
-> That's the point: give people the right skills and infrastructure and they
-> become the master of any app they use — not waiting on an official API, but
-> driving the tools themselves, expertly.
+The key design choice: **a connector is data, not code.** It's a standard
+**OpenAPI 3.1 document** (plus a few `x-mastro-*` extensions for what OpenAPI
+can't express) and a capture manifest. The same rails handle login, flags,
+filters, pagination and multi-step flows — and because it's data, **an agent
+can write one**: the `mastro-author` skill walks it from "watch me do this in
+the browser" to a validated connector.
 
 ---
 
-## Quickstart
+## Try it
 
-### Prerequisites
-
-- Node.js 18+ (for `npm`/`npx`). mastro runs on [Bun](https://bun.sh), which
-  npm installs for you alongside it — nothing to set up.
-- Google Chrome, for connectors that need a login (the capture extension).
-
-### 1. Install
+All you need is Node 18+. mastro runs on [Bun](https://bun.sh), which npm
+installs for you alongside it.
 
 ```bash
-npm install -g mastro-connect    # puts `mastro` on your PATH
-mastro --help
+npm install -g mastro-connect        # or prefix every command with: npx -y mastro-connect
 ```
-
-Or zero-install: prefix every command with `npx -y mastro-connect` instead of
-`mastro`. Working on mastro itself? Clone the repo, `bun install`, and use
-`bun run mastro …`.
-
-### 2. Try a connector
 
 Connectors live in the community catalog,
-[mastro-hq/connectors](https://github.com/mastro-hq/connectors), and install
-themselves the first time you call one — nothing to set up first:
+[mastro-hq/connectors](https://github.com/mastro-hq/connectors), and **install
+themselves the first time you call one**:
 
 ```bash
-mastro hackernews top --limit 5 --json        # the example connector (HN's official API)
+mastro hackernews top --limit 5 --json
 mastro reservecalifornia parks "pfeiffer" --json
 mastro reservecalifornia availability --facility 518 --start 2026-11-06 --end 2026-11-09 --json
+mastro hackernews item --id 8863 --dry-run     # any command: print the request, send nothing
 ```
 
-Prefer a guided start? `mastro setup` lists the catalog, installs what you
-pick, and offers the browser extension and agent skills if you need them.
-`mastro providers available` shows the catalog any time.
+| Connector | What it does | Login |
+| --- | --- | --- |
+| [`hackernews`](https://github.com/mastro-hq/connectors/tree/main/providers/hackernews) | Front page, items, users (the example, over HN's official API) | — |
+| [`reservecalifornia`](https://github.com/mastro-hq/connectors/tree/main/providers/reservecalifornia) | California State Parks campsite search and night-by-night availability; your reservations | optional |
+| [`depop`](https://github.com/mastro-hq/connectors/tree/main/providers/depop) | Search listings, your profile, list your own items for sale | yes |
 
-### 3. Build a connector for an app you use
+`mastro providers available` shows the current catalog. Prefer a guided start?
+**`mastro setup`** lists it, installs what you pick, and offers the browser
+extension and agent skills if you need them.
 
-Let an agent build it:
-
-```bash
-mastro skills add mastro-author --global   # then ask your agent: "make a mastro connector for <app>"
-```
-
-…or write it by hand ([`docs/AUTHORING.md`](docs/AUTHORING.md)).
-
-### 4. Log in and use it
+### Connectors that need a login
 
 Load the capture extension once:
 
 ```bash
-mastro extension install
+mastro extension install     # copies it to ~/.mastro/extension, opens chrome://extensions
 ```
 
-This copies the bundled extension to `~/.mastro/extension` and walks you
-through `chrome://extensions` → **Developer mode** → **Load unpacked**. Pin
-**mastro · connect** — click its icon any time to see capture status. (From a
-repo checkout you can load the [`extension/`](extension) folder directly.)
-
-Then, signed in to the app in Chrome:
+Toggle **Developer mode**, click **Load unpacked**, and paste (the path is on
+your clipboard). Then, signed in to the app in Chrome:
 
 ```bash
-mastro login myapp          # a localhost tab opens, then the app's tab
-mastro status               # confirm the session is stored and verified
-mastro myapp --help         # the connector's commands
-mastro myapp search "vintage levis" --json
+mastro login depop           # a localhost tab opens, then the app's; mastro verifies the session
+mastro depop search "carhartt jacket" --json
+mastro status                # what's logged in, and whether it verified
 ```
 
-Use `--json` for machine-readable output (ideal for agents and scripts).
+### Use it from your agent
+
+Give your agent the skills, then just ask:
+
+```bash
+mastro skills add reservecalifornia --global   # into ~/.claude/skills (or --dir for other agents)
+```
+
+> *"Is anything open at Julia Pfeiffer Burns next weekend?"*
+
+Any agent that can run shell commands works — Claude Code, Codex, Gemini CLI,
+Cursor — as long as it runs on your machine (that's where your session lives).
 
 ---
 
@@ -144,269 +127,213 @@ Use `--json` for machine-readable output (ideal for agents and scripts).
                                 └───────────────┘
 ```
 
-Everything runs on your machine: credentials never leave it, and requests go
-from your computer (or through your own browser tab) to the app.
+- **The extension** ([`extension/`](extension)) is generic — no per-app code.
+  During `mastro login` it follows the connector's manifest to see when you're
+  signed in, captures only what the manifest names (cookies, headers, storage
+  keys), and posts it to a loopback receiver. Outside a login, it only runs
+  proxied requests for sites you've logged in to.
+- **The core** ([`@mastro/core`](packages/core)) runs captures, validates
+  credentials, and stores them in `~/.mastro/` (mode `0600`).
+- **The SDK** ([`@mastro/sdk`](packages/sdk)) turns an OpenAPI operation plus
+  your flags into a request, applies the auth binding, resolves human-friendly
+  filter values, and runs multi-step workflows.
+- **The CLI** ([`@mastro/cli`](packages/cli)) generates each connector's
+  commands, flags and help straight from its spec.
 
-The design line:
+**Some apps only answer a real browser session.** For those, mastro runs the
+request *inside your logged-in tab* — the same way the app's own frontend
+calls its API — and relays the response. No headless browser, no challenge
+solving. → [`docs/BROWSER-PROXY.md`](docs/BROWSER-PROXY.md)
 
-> **Provider manifests define _what_ to capture. The broker defines _how_ to
-> capture. Applications consume _validated_ credentials.**
-
-### The four moving parts
-
-#### 1. The capture extension — [`extension/`](extension)
-
-A **generic** MV3 Chrome extension. It has no per-connector code: it interprets
-whatever `auth.manifest.json` the CLI hands it. During `mastro login` it observes
-the target tab (cookies via `chrome.cookies`, headers via `webRequest`, page
-fetch/XHR via an injected page-bridge), decides when capture is complete from the
-manifest's declarative rules, serializes a minimal credential bundle, and posts it
-back to a loopback receiver. Click its toolbar icon to watch live status.
-
-It only ever observes tabs tied to an active capture session; ordinary browsing is
-never touched, and the session lives in memory and expires fast.
-
-#### 2. The core — [`@mastro/core`](packages/core)
-
-The engine. The **broker** runs a capture session: it stands up a localhost
-**receiver**, opens the browser, waits for the bundle, validates it, and writes a
-minimal credential through the **credential store** (a file store at `~/.mastro/`,
-mode `0600`; the interface is pluggable for keychain/secret-manager backends). It
-also loads and validates each provider's **OpenAPI spec**.
-
-#### 3. The SDK — [`@mastro/sdk`](packages/sdk)
-
-The replay layer. Given a logged-in connector, it builds a request from an OpenAPI
-operation + your CLI flags (query/path/body params, array `style`/`explode`,
-enums, defaults), applies the `x-mastro-auth` binding (headers, cookies,
-per-request `${uuid}` values), resolves dynamic filter values against the app's
-taxonomy endpoints (cached), runs the request through the right **transport**, and
-maps the response. It also runs multi-step **workflows**.
-
-#### 4. The CLI — [`@mastro/cli`](packages/cli)
-
-The `mastro` binary. Built-in verbs (`login`, `logout`, `status`, `providers`,
-`skills`, `validate`) plus **per-provider commands generated from the OpenAPI
-operations**. Flags come from the operation's parameters; their allowed values
-come from `schema.enum`; help is auto-generated. The CLI is a thin, faithful
-projection of the spec.
+**Multi-step flows** (upload each photo → poll → create the listing; fill a
+cart → hand it to your browser to pay) are declared in the spec, and
+`--dry-run` prints every planned request first. → [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md)
 
 ---
 
-## Why OpenAPI (and the `x-mastro-*` extensions)
+## Security & privacy
 
-A connector's API is described as a **valid OpenAPI 3.1 document**, so standard
-tooling validates and code-gens it.
+mastro holds your sessions, so it's built to keep them yours:
 
-OpenAPI natively covers the surface every API shares: paths, methods,
-multiple-choice fields (`enum`), repeatable params (`array` + `style`/`explode`),
-and an auth inventory. The things it genuinely **can't** express live in
-spec-legal `x-mastro-*` extensions (conformant validators ignore unknown `x-`
-keys, so the doc stays valid OpenAPI):
+- **Local only.** Credentials are stored on your machine and sent only to the
+  app itself. There is no mastro server, account, or telemetry.
+- **Bound to where you logged in.** A credential records the sites you
+  consented to at login. mastro refuses to send it — or run anything in your
+  browser — anywhere else, even if a connector update asks it to.
+- **Minimal capture.** The extension captures only what a connector's manifest
+  names, only during a login you started, and the stored credential is the
+  minimum needed to replay. Auth headers are redacted in logs and dry runs.
+- **A locked-down local bridge.** The loopback proxy only accepts the
+  extension (web pages and DNS rebinding are refused), and the extension only
+  acts on sites you logged in to.
+- **Connectors are data, validated.** `mastro validate` checks every catalog
+  connector in CI — including that it never sends your session to a host its
+  manifest doesn't name, and that it contains no captured secrets.
 
-| Extension | Solves |
-| --- | --- |
-| `x-mastro-auth` | How a captured credential becomes a live request: header/cookie templates and **per-request generated values** (`${uuid}`, `${now}`). |
-| `x-mastro-resolve` | **Dynamic enums** whose valid values come from another endpoint's response, or bundled reference data (e.g. an app's size/brand taxonomies). |
-| `x-mastro-replay` | Transport tuning OpenAPI doesn't model: browser-proxy, retry & re-capture status codes, rate limits. |
-| `x-mastro-extract` | Structured objects out of server-rendered HTML or React Server Components streams. |
-| `x-mastro-workflow` | Multi-step stateful flows (upload → poll → create) that aren't a single request. |
-| `x-mastro-command` / `-result` / `-hidden` | CLI projection: the subcommand name, the response path to print, hiding metadata-only endpoints. |
-
-See [`docs/AUTHORING.md`](docs/AUTHORING.md) for the full reference.
-
----
-
-## Notable capabilities
-
-General features of the framework — every connector gets them for free.
-
-### Running in your own browser — the browser proxy
-
-Some apps only answer requests that come from a real browser session. When a
-provider sets `x-mastro-replay.via_browser`, mastro runs the request **inside
-your already-logged-in browser tab** and relays the response back — the same
-way the app's own frontend calls its API. No headless browser, no
-challenge-solving. → [`docs/BROWSER-PROXY.md`](docs/BROWSER-PROXY.md)
-
-### Human-friendly filters — taxonomy resolution
-
-A flag can accept either a wire id _or_ a human label, resolved against the app's
-own filter-metadata endpoints (fetched once, cached under `~/.mastro/cache/`) or a
-bundled JSON file. So `--sizes M` becomes the right internal id automatically, and
-`mastro <app> search --help` shows real, current choices.
-
-### Multi-step flows — workflows
-
-A command can be a declarative sequence of steps with data flowing between them
-(`foreach` with index pairing, `poll`-until, binary uploads, per-step transport,
-pure-transform steps, and typed/derived body fields) — e.g. upload each photo →
-poll until processed → create the listing, expressed entirely in the OpenAPI
-doc. `--dry-run` prints every planned request body without sending anything. A
-workflow can also stage something and **hand it back to the browser** for you
-to finish — fill a cart, then open it in your tab to pay.
-→ [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md)
+Details: [`docs/BROWSER-PROXY.md#security-model`](docs/BROWSER-PROXY.md#security-model).
 
 ---
 
 ## Building a connector
 
-A connector is a folder with two files (plus docs). **No code.**
+A connector is a folder — **no code**:
 
 ```text
 providers/<name>/
   auth.manifest.json   # what the extension captures in the browser
   openapi.yaml         # the API surface — OpenAPI 3.1 + x-mastro-* extensions
   README.md            # how it works, endpoints, drift symptoms
-  reference/           # optional bundled lookup data (taxonomies)
-  skills/<skill>/      # agent skills: SKILL.md (frontmatter: name, description)
+  skills/<skill>/      # agent playbooks (SKILL.md)
 ```
 
-**With an agent:** `mastro skills add mastro-author` installs a skill that
-walks an agent through capturing the app's traffic, finding the minimal auth,
-writing the manifest and spec, validating, and testing — read-only first, with
-write operations behind `--dry-run` and your confirmation.
+**With an agent:** `mastro skills add mastro-author`, then ask it to *"make a
+mastro connector for &lt;app&gt;"*. It watches you do the task once in the
+browser, finds the minimal auth, writes the manifest and spec, validates, and
+tests — read-only first, with anything that changes state behind `--dry-run`
+and your confirmation.
 
-**By hand:**
-
-1. Log into the app, open DevTools → Network, do the action you want to automate.
-2. Note the **auth artifact** (cookie? bearer token?), the **base origin**, the
-   **endpoint** (path, params, headers), and whether it needs a real browser.
-3. Write `auth.manifest.json` (capture rules) and `openapi.yaml` (the API, with
-   `x-mastro-*` for auth/replay/dynamic filters).
-4. Check it:
-
-   ```bash
-   mastro validate providers/<name>   # schema, references, templates, no committed secrets
-   mastro <name> --help               # the generated commands
-   ```
-
-Full walkthrough: **[`docs/AUTHORING.md`](docs/AUTHORING.md)**. Minimal worked
-example: **[`hackernews`](https://github.com/mastro-hq/connectors/tree/main/providers/hackernews)**
-in the catalog.
-
-### Where connectors live
-
-mastro searches `$MASTRO_PROVIDERS` (colon-separated directories), then
-`~/.mastro/providers`; the package itself ships no connectors. Calling a
-connector that isn't installed fetches it from the community catalog,
-[mastro-hq/connectors](https://github.com/mastro-hq/connectors) — PRs welcome
-— into `~/.mastro/providers`, pinned to a commit. Only that catalog
-auto-installs; any other GitHub repo with `providers/<id>/` at its root works
-through `--repo`:
+**By hand:** watch the app's requests in DevTools → Network, then describe
+them. Check your work as you go:
 
 ```bash
-mastro providers available --repo you/connectors   # what a repo offers
-mastro providers add myapp --repo you/connectors   # → ~/.mastro/providers/myapp, pinned to a commit
+mastro validate providers/<name>   # schema, references, credential hosts, no committed secrets
+mastro <name> --help               # the generated commands
+```
+
+Full walkthrough: [`docs/AUTHORING.md`](docs/AUTHORING.md). Smallest complete
+example: [`hackernews`](https://github.com/mastro-hq/connectors/tree/main/providers/hackernews).
+Contributions to the catalog are welcome:
+[mastro-hq/connectors](https://github.com/mastro-hq/connectors).
+
+<details>
+<summary>The <code>x-mastro-*</code> extensions</summary>
+
+OpenAPI covers what every API shares (paths, methods, enums, array params, an
+auth inventory). What it can't express lives in spec-legal `x-` keys, so the
+document stays valid OpenAPI:
+
+| Extension | Solves |
+| --- | --- |
+| `x-mastro-auth` | How a captured credential becomes a live request: header/cookie templates, per-request generated values (`${uuid}`, `${now}`), a post-login verify call. |
+| `x-mastro-replay` | Transport: run in the user's tab, retry and re-login status codes, rate limits. |
+| `x-mastro-resolve` | Dynamic enums whose values come from another endpoint (an app's sizes or brands) or bundled reference data. |
+| `x-mastro-extract` | Structured objects out of server-rendered HTML or React Server Components streams. |
+| `x-mastro-workflow` | Multi-step flows, with `foreach`, `poll`, uploads, and a browser handoff. |
+| `x-mastro-command` / `-result` / `-hidden` | CLI projection: command names, what to print, helper endpoints. |
+
+</details>
+
+<details>
+<summary>Where connectors live</summary>
+
+mastro searches `$MASTRO_PROVIDERS` (colon-separated directories), then
+`~/.mastro/providers`; the package itself ships none. Calling a connector that
+isn't installed fetches it from the catalog, pinned to a commit. Any GitHub repo
+with `providers/<id>/` at its root works through `--repo`, including private
+ones (via `GITHUB_TOKEN` / `GH_TOKEN` or your `gh` login):
+
+```bash
+mastro providers available --repo you/connectors
+mastro providers add myapp --repo you/connectors
 mastro providers update                            # re-fetch everything you've added
 ```
 
-Private repos work too: mastro authenticates with `GITHUB_TOKEN` / `GH_TOKEN`,
-or your `gh` login. Or skip fetching and point `MASTRO_PROVIDERS` at a
-checkout. Run `mastro validate` in the connector repo's CI.
+</details>
 
 ---
 
 ## Agent skills
 
-Connectors ship **agent skills** — `SKILL.md` playbooks that teach an AI agent
-when and how to drive them (preconditions, `--json` shapes, rate limits, safety
-rules like "dry-run before spending money"). They live inside the provider
-definition (`providers/<id>/skills/<skill>/SKILL.md`), so a fix to a drifting
-API and the playbook that documents it travel together.
+Connectors ship **agent skills** — `SKILL.md` playbooks that teach an agent
+when and how to drive them: preconditions, `--json` shapes, rate limits, and
+safety rules like "dry-run before spending money". They live next to the spec,
+so a fix to a drifting API and its playbook travel together.
 
 ```bash
 mastro skills list                       # what's available
-mastro skills add hackernews             # install into ./.claude/skills (project)
-mastro skills add myapp/search --global  # ~/.claude/skills (everywhere)
-mastro skills add myapp --dir .agents/skills
-mastro skills add mastro-author          # the connector-authoring skill
+mastro skills add depop                  # ./.claude/skills (this project)
+mastro skills add depop/search --global  # ~/.claude/skills (everywhere)
+mastro skills add depop --dir .agents/skills
 mastro skills update                     # refresh everything installed here
 ```
 
-Every install also drops the root `mastro` skill — the session-model
-conventions (login, `status --json`, exit codes) every provider skill builds
-on. Installed skills carry a `.mastro.json` provenance stamp so `update` knows
-what it owns.
+Every install includes the root `mastro` skill (sessions, exit codes,
+conventions) that the connector skills build on.
 
 ---
 
-## Project layout
+## Why a CLI?
 
-```text
-mastro-connect/
-├── packages/
-│   ├── core/        @mastro/core — schemas, OpenAPI loader, registry,
-│   │                credential store, broker, receiver, proxy server
-│   ├── sdk/         @mastro/sdk — connector, transports, taxonomy resolver,
-│   │                workflow runner, templating
-│   └── cli/         @mastro/cli — the `mastro` binary
-├── extension/       generic MV3 capture + browser-proxy runtime (plain JS, type-checked)
-├── skills/
-│   ├── mastro/        the root agent skill (session model, conventions)
-│   └── mastro-author/ the connector-authoring skill
-├── bin/             node launcher shim for npx/global installs
-└── docs/            AUTHORING · BROWSER-PROXY · WORKFLOWS
-```
+- **Not browser automation:** a request to the app's own API takes
+  milliseconds and returns structured data; clicking through the UI takes
+  seconds per step and breaks when the layout moves.
+- **Not an MCP server:** a CLI is something every agent can already call,
+  composes with pipes and scripts, needs no running server, and is just as
+  usable by you. Skills give the agent the context an MCP tool description
+  would.
+- **Not a hosted API:** your session never leaves your machine — which is also
+  why mastro works with agents that run on your computer, not cloud agents on
+  someone else's.
 
-Bun + TypeScript throughout (strict; the extension JS is `checkJs`-verified).
-From a checkout everything runs on Bun directly — the only build step is
-`bun run build`, which bundles the CLI into `dist/` for the npm package.
+---
+
+## Status
+
+Early (0.2) and moving fast. Developed and tested on macOS with Chrome; Linux
+should work, and Windows and other Chromium browsers are untested. Unofficial connectors break when apps
+change — each connector's README lists its drift symptoms, and `mastro login`
+again fixes most of them.
+
+## Ethics & scope
+
+mastro is for personal automation: an agent acting for **you**, in apps
+**you're** logged into, doing what you could do by hand — not scraping other
+people's data, not bulk collection, not defeating bot defenses. Connectors run
+at a human pace (every spec carries a rate limit) and anything that changes
+state is dry-run first. Prefer official APIs where they exist. Catalog
+connectors are unofficial and not affiliated with the services they talk to;
+any is removed on request from the service's operator. You're responsible for
+how you use them and for each service's terms.
+
+---
+
+## Development
 
 ```bash
+bun install
 bun test            # run the test suite
-bun run typecheck   # type-check everything (TS + extension)
-bun run mastro …    # run the CLI from source
+bun run typecheck   # TypeScript + the extension's checkJs
+bun run mastro …    # the CLI from source
+bun run build       # bundle dist/ for npm
 ```
 
----
+```text
+packages/core/   schemas, OpenAPI loader, registry, credential store, broker, proxy server
+packages/sdk/    connector, transports, credential guard, resolver, workflow runner, templating
+packages/cli/    the `mastro` binary
+extension/       generic MV3 capture + browser-proxy runtime
+skills/          the root `mastro` skill and `mastro-author`
+docs/            AUTHORING · BROWSER-PROXY · WORKFLOWS
+```
+
+Framework contributions are welcome — run `bun test` and `bun run typecheck`
+before opening a PR. Connectors go to
+[mastro-hq/connectors](https://github.com/mastro-hq/connectors).
 
 ## Documentation
 
 | Doc | What it covers |
 | --- | --- |
-| [`docs/AUTHORING.md`](docs/AUTHORING.md) | Build a connector: manifest + OpenAPI + `x-mastro-*` reference. |
-| [`docs/BROWSER-PROXY.md`](docs/BROWSER-PROXY.md) | How requests run inside your real browser tab. |
-| [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Multi-step flows: steps, `foreach`, `poll`, handoff, dry-run. |
-| [`extension/README.md`](extension/README.md) | The capture extension internals. |
-| [`skills/mastro-author`](skills/mastro-author/SKILL.md) | The agent playbook for building a connector. |
+| [`docs/AUTHORING.md`](docs/AUTHORING.md) | Build a connector: manifest, OpenAPI, the `x-mastro-*` reference |
+| [`docs/BROWSER-PROXY.md`](docs/BROWSER-PROXY.md) | Running requests in your tab, and the security model |
+| [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Multi-step flows: steps, `foreach`, `poll`, handoff, dry-run |
+| [`extension/README.md`](extension/README.md) | The capture extension internals |
+| [`skills/mastro-author`](skills/mastro-author/SKILL.md) | The agent playbook for building a connector |
 
----
-
-## Ethics & scope
-
-mastro is a framework for personal automation — an agent acting for **you**,
-in apps **you** are logged into, the way you would by hand.
-
-- It operates **only** within a browser session the current user already
-  controls, on the user's own machine. It does not bypass authorization or
-  consent, never types or stores passwords, and never sends credentials
-  anywhere but the app itself.
-- It persists the **minimum** credential needed to replay, stored locally with
-  tight permissions; tokens and cookies are redacted in all logs. A credential
-  is bound to the sites you logged in to: mastro refuses to send it anywhere
-  else, even if a connector update asks it to.
-- It is not a scraper: connectors act on the user's own account at a human
-  pace (rate limits are part of every spec), not across other people's data.
-- It doesn't defeat bot defenses — no CAPTCHA or challenge solving. When an app
-  needs a real browser, requests run in the user's own tab.
-- Prefer official APIs where they exist and fit. Respect each service's Terms
-  of Service. You are responsible for the connectors you build and run.
-
-This repository ships the framework and one example connector over an official
-public API. Community connectors for third-party services live in
-[mastro-hq/connectors](https://github.com/mastro-hq/connectors); each is
-unofficial, documents what it does, and is removed on request from the
-service's operator.
-
----
-
-## Contributing
-
-Contributions to the framework are welcome — the core, SDK, CLI, extension,
-docs and the authoring skill. Run `bun test` and `bun run typecheck` before
-opening a PR. Connectors go to
-[mastro-hq/connectors](https://github.com/mastro-hq/connectors).
+> **Why "mastro"?** In Italian a _mastro_ is the master of a craft — the
+> _mastro falegname_, the master carpenter. Give people the right tools and
+> they become the master of any app they use, instead of waiting on an
+> official API.
 
 ## License
 
