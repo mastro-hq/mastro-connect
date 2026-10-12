@@ -21,3 +21,6 @@ auth/
 # env
 .env
 .env.local
+
+# Claude Code local state (worktrees, launch config)
+.claude/
