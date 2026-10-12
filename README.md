@@ -10,7 +10,7 @@ npx mastro-connect reservecalifornia parks "big sur"   # campsite search
 npx mastro-connect setup                               # pick connectors, extension, agent skills
 ```
 
-[Try it](#try-it) · [How it works](#how-it-works) · [Security](#security--privacy) · [Build a connector](#building-a-connector) · [Agent skills](#agent-skills) · [Why a CLI](#why-a-cli) · [Docs](#documentation)
+[Give it to your agent](#give-it-to-your-agent) · [Try it](#try-it) · [How it works](#how-it-works) · [Security](#security--privacy) · [Build a connector](#building-a-connector) · [Agent skills](#agent-skills) · [Why a CLI](#why-a-cli) · [Docs](#documentation)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](LICENSE)
 [![npm](https://img.shields.io/npm/v/mastro-connect?color=black)](https://www.npmjs.com/package/mastro-connect)
@@ -41,6 +41,46 @@ can't express) and a capture manifest. The same rails handle login, flags,
 filters, pagination and multi-step flows — and because it's data, **an agent
 can write one**: the `mastro-author` skill walks it from "watch me do this in
 the browser" to a validated connector.
+
+---
+
+## Give it to your agent
+
+Paste this into Claude Code, Codex, Gemini CLI, Cursor — any agent that runs
+shell commands on your machine:
+
+```text
+Set up mastro for me (https://github.com/mastro-hq/mastro-connect). It turns
+web apps I use into CLI commands you can call, using my own browser session.
+
+1. Run `npx -y mastro-connect --version` to check it works (it only needs Node).
+2. Install its skills where you load skills from:
+   `npx -y mastro-connect skills add mastro mastro-author --global` for Claude Code,
+   or add `--dir <your skills folder>` instead of `--global`. Read them.
+3. Run `npx -y mastro-connect hackernews top --limit 5 --json` and summarize it,
+   so we know it works.
+4. Run `npx -y mastro-connect providers available` and ask me which of those
+   apps I use. Install their skills too (`skills add <id>`).
+5. For any that need a login, run `npx -y mastro-connect extension install` and
+   walk me through loading it in Chrome, then I'll run `mastro login <id>`.
+   Never type my passwords.
+6. Ask me which other apps I wish you could use. For those, offer to build a
+   connector with the mastro-author skill.
+
+Always use --json, and run --dry-run and ask me before anything that changes
+state (posting, buying, booking).
+```
+
+And to build a connector for an app that isn't in the catalog yet:
+
+```text
+Use mastro's mastro-author skill to build a connector for <app> so you can
+<what you want to do>. Install it with
+`npx -y mastro-connect skills add mastro-author --global` if you don't have it.
+Start read-only. I'll do the task once in my browser so you can capture the
+requests (or I'll export a HAR for you), and dry-run anything that changes
+state before asking me.
+```
 
 ---
 
