@@ -28,7 +28,7 @@ import type {
 import { encodeForm, parseFormFields } from "./form.ts";
 import { renderDeep, renderTemplate, renderTemplateString, type TemplateContext } from "./template.ts";
 import type { Transport } from "./transport.ts";
-import { getPath, metaRefreshUrl, parseMaybeJson, sleep } from "./util.ts";
+import { getPath, parseMaybeJson, sameOriginRefresh, sleep } from "./util.ts";
 
 export class WorkflowError extends Error {
   constructor(public readonly step: string, message: string) {
@@ -108,13 +108,24 @@ export class WorkflowRunner {
     if (this.deps.dryRun) {
       return { dry_run: true, planned_requests: this.planned, ...(handoff ? { handoff } : {}) };
     }
-    if (handoff) {
-      if (!this.deps.handoff) throw new Error(`operation "${op.id}" declares a handoff but no browser is available`);
-      await this.deps.handoff(handoff.url, handoff.local_storage);
-    }
     // `result` names a step (e.g. "createListing") or a dotted path into one
     // ("createListing.slug"); resolve it against the steps map directly.
-    return workflow.result ? getPath(steps, workflow.result) : steps;
+    const result = workflow.result ? getPath(steps, workflow.result) : steps;
+    if (handoff) {
+      try {
+        if (!this.deps.handoff) throw new Error("no browser is available");
+        await this.deps.handoff(handoff.url, handoff.local_storage);
+      } catch (err) {
+        // The steps already ran (a cart exists): don't lose what they made, or a
+        // rerun would make it twice. Say where to finish by hand.
+        const why = err instanceof Error ? err.message : String(err);
+        throw new WorkflowError(
+          "handoff",
+          `${why}. The steps before it already ran — finish at ${handoff.url}. Result: ${JSON.stringify(result).slice(0, 500)}`,
+        );
+      }
+    }
+    return result;
   }
 
   // -- step execution --------------------------------------------------------
@@ -228,9 +239,8 @@ export class WorkflowRunner {
     // too. GET, same headers, at most two hops.
     if (this.deps.spec.replay().follow_html_refresh) {
       for (let hop = 0; hop < 2; hop++) {
-        const target = metaRefreshUrl(text);
-        if (!target) break;
-        const next = new URL(target, url).toString();
+        const next = sameOriginRefresh(text, url);
+        if (!next) break;
         res = await transport.send({ method: "GET", url: next, headers });
         text = await res.text();
       }
@@ -400,7 +410,7 @@ function stepStub(): unknown {
  * Mask sensitive headers in a dry-run preview: the usual suspects plus any the
  * spec lists in `x-mastro-auth.redact` (lower-cased).
  */
-function redactAuth(headers: Record<string, string>, extra: ReadonlySet<string>): Record<string, string> {
+export function redactAuth(headers: Record<string, string>, extra: ReadonlySet<string>): Record<string, string> {
   const out: Record<string, string> = {};
   const secret = /^(authorization|cookie|x-user-id)$/i;
   for (const [k, v] of Object.entries(headers)) out[k] = secret.test(k) || extra.has(k.toLowerCase()) ? "••••" : v;
@@ -408,7 +418,7 @@ function redactAuth(headers: Record<string, string>, extra: ReadonlySet<string>)
 }
 
 /** Show a JSON body as parsed (for readability) or note a binary upload. */
-function previewBody(body: string | Uint8Array<ArrayBuffer> | undefined): unknown {
+export function previewBody(body: string | Uint8Array<ArrayBuffer> | undefined): unknown {
   if (body === undefined) return undefined;
   if (typeof body !== "string") return `<binary ${body.byteLength} bytes>`;
   try {

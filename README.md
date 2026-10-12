@@ -56,8 +56,9 @@ walks it from capture to a validated connector.
 
 ### Prerequisites
 
-- [Bun](https://bun.sh) ≥ 1.1 (the runtime; the launcher tells you if it's missing)
-- Google Chrome (for the capture extension)
+- Node.js 18+ (for `npm`/`npx`). mastro runs on [Bun](https://bun.sh), which
+  npm installs for you alongside it — nothing to set up.
+- Google Chrome, for connectors that need a login (the capture extension).
 
 ### 1. Install
 
@@ -382,7 +383,9 @@ in apps **you** are logged into, the way you would by hand.
   consent, never types or stores passwords, and never sends credentials
   anywhere but the app itself.
 - It persists the **minimum** credential needed to replay, stored locally with
-  tight permissions; tokens and cookies are redacted in all logs.
+  tight permissions; tokens and cookies are redacted in all logs. A credential
+  is bound to the sites you logged in to: mastro refuses to send it anywhere
+  else, even if a connector update asks it to.
 - It is not a scraper: connectors act on the user's own account at a human
   pace (rate limits are part of every spec), not across other people's data.
 - It doesn't defeat bot defenses — no CAPTCHA or challenge solving. When an app

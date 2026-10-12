@@ -64,9 +64,39 @@ function isListField(field: ExtractField): field is ExtractListField {
   return "each" in field;
 }
 
-/** `selector` scoped inside `scope` (document-scoped when there is none). */
+/**
+ * `selector` scoped inside `scope` (document-scoped when there is none). A
+ * selector list is scoped part by part: `.a, .b` inside `.card` must become
+ * `.card .a, .card .b`, not `.card .a, .b` (which matches `.b` anywhere).
+ */
 function within(scope: string | undefined, selector: string): string {
-  return scope === undefined ? selector : `${scope} ${selector}`;
+  if (scope === undefined) return selector;
+  return splitSelectorList(selector)
+    .map((part) => `${scope} ${part}`)
+    .join(", ");
+}
+
+/** Split a selector list on its top-level commas (not those inside `:is(…)` or `[attr="a,b"]`). */
+function splitSelectorList(selector: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quote: string | undefined;
+  let start = 0;
+  for (let i = 0; i < selector.length; i++) {
+    const ch = selector[i]!;
+    if (quote) {
+      if (ch === "\\") i++;
+      else if (ch === quote) quote = undefined;
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === "(" || ch === "[") depth++;
+    else if (ch === ")" || ch === "]") depth--;
+    else if (ch === "," && depth === 0) {
+      parts.push(selector.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(selector.slice(start).trim());
+  return parts.filter((p) => p !== "");
 }
 
 const compiled = new WeakMap<ExtractValueField, RegExp>();

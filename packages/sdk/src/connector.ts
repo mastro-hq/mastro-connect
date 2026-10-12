@@ -13,11 +13,12 @@
  * It knows nothing provider-specific — everything comes from the OpenAPI doc.
  */
 import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, realpathSync } from "node:fs";
+import { resolve, sep as pathSep } from "node:path";
 
 import {
   isExpired,
+  manifestOrigins,
   unixNow,
   type CredentialStore,
   type OpenApiSpec,
@@ -32,11 +33,12 @@ import { BrowserTransport } from "./browser-transport.ts";
 import { JsonCache } from "./cache.ts";
 import { extractItems } from "./extract.ts";
 import { Resolver, type MetadataFetcher } from "./resolver.ts";
-import { WorkflowRunner } from "./workflow.ts";
+import { previewBody, redactAuth, WorkflowRunner, type PlannedRequest } from "./workflow.ts";
 import { renderDeep, renderStringMap, renderTemplate, type TemplateContext } from "./template.ts";
 import { FetchTransport, selectTransport, type HttpResponse, type Transport } from "./transport.ts";
 import { TokenBucket, withBucket } from "./throttle.ts";
-import { getPath, metaRefreshUrl, parseMaybeJson, sleep } from "./util.ts";
+import { getPath, parseMaybeJson, sameOriginRefresh, sleep } from "./util.ts";
+import { CredentialScope } from "./credential-guard.ts";
 
 export class NotAuthenticatedError extends Error {
   constructor(public readonly providerId: string, message?: string) {
@@ -70,6 +72,22 @@ export interface CallResult {
   result: unknown;
 }
 
+/** What a connector needs from a credential: its fields, and the origins they may go to. */
+export interface ConnectorCredential {
+  fields: Record<string, unknown>;
+  origins?: string[];
+}
+
+/** A file inside the provider directory: `file:` sources can't reach outside it (or out via a symlink). */
+function providerFile(dir: string, relPath: string): string {
+  const root = realpathSync(dir);
+  const path = realpathSync(resolve(root, relPath));
+  if (!path.startsWith(root + pathSep)) {
+    throw new Error(`x-mastro-resolve file "${relPath}" is outside the connector directory`);
+  }
+  return path;
+}
+
 export class Connector {
   /** Throttled transports, built lazily: the spec's default and per-kind overrides. */
   private readonly transports = new Map<TransportKind | "default", Transport>();
@@ -79,18 +97,26 @@ export class Connector {
   /** One provider-wide rate-limit bucket shared by every transport (none if undeclared). */
   private readonly bucket: TokenBucket | undefined;
   private readonly resolver: Resolver;
+  private readonly scope: CredentialScope;
 
   private constructor(
     private readonly provider: Provider,
     private readonly spec: OpenApiSpec,
-    private readonly credential: { fields: Record<string, unknown> },
+    private readonly credential: ConnectorCredential,
   ) {
     const rpm = spec.replay().rate_limit?.requests_per_minute;
-    this.bucket = rpm && rpm > 0 ? new TokenBucket(rpm) : undefined;
+    this.bucket = rpm && rpm >= 1 ? new TokenBucket(rpm) : undefined;
     this.resolver = new Resolver(
       new JsonCache(provider.id),
       (operationId) => this.fetchMetadata(operationId),
-      (relPath) => JSON.parse(readFileSync(join(provider.dir, relPath), "utf8")),
+      (relPath) => JSON.parse(readFileSync(providerFile(provider.dir, relPath), "utf8")),
+    );
+    // Credentials captured before 0.2.2 carry no origins: fall back to the
+    // manifest's — the closest record of what the user logged in for.
+    this.scope = new CredentialScope(
+      provider.id,
+      credential.fields,
+      credential.origins ?? manifestOrigins(provider.manifest),
     );
   }
 
@@ -102,7 +128,8 @@ export class Connector {
   static load(provider: Provider, store: CredentialStore, opts: { anonymous?: boolean } = {}): Connector {
     const credential = store.get(provider.id);
     if (opts.anonymous && (!credential || isExpired(credential))) {
-      return Connector.forCredential(provider, { fields: {} });
+      // No login: no recorded origins, so nothing may run through the browser.
+      return Connector.forCredential(provider, { fields: {}, origins: [] });
     }
     if (!credential) throw new NotAuthenticatedError(provider.id);
     if (isExpired(credential)) {
@@ -118,7 +145,7 @@ export class Connector {
    * Build a connector against an explicit credential, bypassing the store. Used
    * to verify a freshly-captured credential before it's persisted.
    */
-  static forCredential(provider: Provider, credential: { fields: Record<string, unknown> }): Connector {
+  static forCredential(provider: Provider, credential: ConnectorCredential): Connector {
     if (!provider.spec) {
       throw new Error(`provider "${provider.id}" has no OpenAPI spec; nothing to call`);
     }
@@ -192,7 +219,11 @@ export class Connector {
       authHeaders: () => this.authHeaders(),
       baseContext: () => this.authContext(),
       transport: (kind) => this.getTransport(kind),
-      handoff: (url, localStorage) => this.browserTransport().handoff(url, localStorage),
+      handoff: (url, localStorage) => {
+        // A handoff writes storage and opens a page in the user's browser.
+        this.scope.requireOrigin(url);
+        return this.browserTransport().handoff(url, localStorage);
+      },
       dryRun: opts.dryRun ?? false,
     });
     return runner.run(op, resolved);
@@ -246,6 +277,23 @@ export class Connector {
     return headers;
   }
 
+  /**
+   * The request `call` would send, without sending it (`--dry-run` on a
+   * single-request command). Auth headers are masked, as in a workflow plan.
+   */
+  async plan(op: OperationView, args: Record<string, unknown>): Promise<{ dry_run: true; planned_requests: PlannedRequest[] }> {
+    const url = await this.buildUrl(op, args);
+    const headers = this.buildHeaders(op, args);
+    const body = this.buildBody(op, args);
+    const secret = new Set((this.spec.auth().redact ?? []).map((h) => h.toLowerCase()));
+    return {
+      dry_run: true,
+      planned_requests: [
+        { step: op.id, method: op.method.toUpperCase(), url, headers: redactAuth(headers, secret), body: previewBody(body) },
+      ],
+    };
+  }
+
   /** Invoke an operation with parsed CLI args (flag name → value). */
   async call(op: OperationView, args: Record<string, unknown>): Promise<CallResult> {
     const url = await this.buildUrl(op, args);
@@ -296,9 +344,8 @@ export class Connector {
 
     if (this.spec.replay().follow_html_refresh) {
       for (let hop = 0; hop < 2; hop++) {
-        const target = metaRefreshUrl(text);
-        if (!target) break;
-        const url = new URL(target, req.url).toString();
+        const url = sameOriginRefresh(text, req.url);
+        if (!url) break;
         res = await this.sendWithRetry(transport, { method: "GET", url, headers: req.headers });
         text = await res.text();
       }
@@ -445,13 +492,16 @@ export class Connector {
     if (existing) return existing;
 
     const replay = this.spec.replay();
-    const base: Transport =
-      kind === "browser" || (kind === undefined && replay.via_browser)
-        ? this.browserTransport()
-        : kind === "direct"
-          ? new FetchTransport()
-          : await selectTransport(replay.impersonate_browser ?? false);
-    const transport = withBucket(base, this.bucket);
+    const viaBrowser = kind === "browser" || (kind === undefined && replay.via_browser === true);
+    const base: Transport = viaBrowser
+      ? this.browserTransport()
+      : kind === "direct"
+        ? new FetchTransport()
+        : await selectTransport(replay.impersonate_browser ?? false);
+    const transport = this.scope.guard(
+      withBucket(base, this.bucket),
+      viaBrowser ? { tabOrigin: replay.browser_tab_origin } : undefined,
+    );
     this.transports.set(key, transport);
     return transport;
   }

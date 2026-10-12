@@ -7,6 +7,7 @@
  * The broker owns the *how* of capture; the provider manifest owns the *what*.
  */
 import { openInBrowser } from "./browser.ts";
+import { manifestOrigins } from "./origins.ts";
 import { Receiver } from "./receiver.ts";
 import { isExpired, unixNow, type CredentialStore } from "./store.ts";
 import type { Provider } from "./registry.ts";
@@ -128,6 +129,7 @@ export class AuthBroker {
       captured_at: bundle.captured_at ?? unixNow(),
       expires_at: bundle.expires_at,
       fields: bundle.credentials,
+      origins: manifestOrigins(provider.manifest),
       browser_context: bundle.browser_context,
     };
   }

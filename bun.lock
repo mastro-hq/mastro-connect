@@ -9,6 +9,16 @@
         "@types/chrome": "^0.1.42",
         "typescript": "^6.0.3",
       },
+      "optionalDependencies": {
+        "@oven/bun-darwin-aarch64": "1.4.3",
+        "@oven/bun-darwin-x64": "1.4.3",
+        "@oven/bun-linux-aarch64": "1.4.3",
+        "@oven/bun-linux-aarch64-musl": "1.4.3",
+        "@oven/bun-linux-x64": "1.4.3",
+        "@oven/bun-linux-x64-musl": "1.4.3",
+        "@oven/bun-windows-aarch64": "1.4.3",
+        "@oven/bun-windows-x64": "1.4.3",
+      },
     },
     "packages/cli": {
       "name": "@mastro/cli",

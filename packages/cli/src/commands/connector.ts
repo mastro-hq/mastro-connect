@@ -62,7 +62,8 @@ export async function runConnector(
     return 0;
   }
 
-  // --dry-run is a workflow-wide flag, not a connector arg; pull it out first.
+  // --dry-run applies to every command (print the plan, send nothing); it's
+  // not a connector arg, so pull it out first.
   const dryRun = commandArgs.includes("--dry-run");
   const opArgs = commandArgs.filter((a) => a !== "--dry-run");
 
@@ -84,6 +85,10 @@ export async function runConnector(
     if (op.isWorkflow) {
       const result = await connector.runWorkflow(op, args, { dryRun });
       await emit(result, asJson);
+      return 0;
+    }
+    if (dryRun) {
+      await emit(await connector.plan(op, args), asJson);
       return 0;
     }
     const result = await connector.call(op, args);

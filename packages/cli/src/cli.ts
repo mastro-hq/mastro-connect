@@ -32,11 +32,11 @@ export async function run(argv: string[]): Promise<number> {
   const args = argv.filter((a) => a !== "--json");
   const [command, ...rest] = args;
 
-  if (!command || command === "--help" || command === "-h") {
+  if (!command || command === "--help" || command === "-h" || command === "help") {
     printHelp();
     return command ? 0 : 1;
   }
-  if (command === "--version" || command === "-v") {
+  if (command === "--version" || command === "-v" || command === "version") {
     console.log(VERSION);
     return 0;
   }

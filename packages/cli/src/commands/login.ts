@@ -5,12 +5,18 @@ import { Connector } from "@mastro/sdk";
 import type { CliContext } from "../context.ts";
 import { UsageError } from "../args.ts";
 import { ensureProvider } from "../ensure-provider.ts";
+import { extensionInstalled, extensionOutdated } from "./extension.ts";
 import { ui } from "../output.ts";
 
 export async function login(ctx: CliContext, providerId: string | undefined): Promise<number> {
   if (!providerId) throw new UsageError("usage: mastro login <provider>");
 
   const provider = await ensureProvider(ctx, providerId);
+  if (!extensionInstalled()) {
+    ui.warn("The mastro browser extension isn't set up yet — run `mastro extension install` first (one time).");
+  } else if (extensionOutdated()) {
+    ui.warn("Your mastro browser extension is out of date — run `mastro extension install`, then hit ↻ on its card in chrome://extensions.");
+  }
   ui.heading(`Connecting ${provider.manifest.display_name}`);
 
   const credential = await ctx.broker.capture(

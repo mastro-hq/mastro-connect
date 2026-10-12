@@ -15,6 +15,7 @@ import { evaluateCompletion } from "./lib/completion.js";
 import { renderFields } from "./lib/serialize.js";
 import { extractCookies } from "./lib/cookies.js";
 import { startProxyLoop } from "./lib/proxy.js";
+import { rememberOrigins } from "./lib/allowlist.js";
 
 // Long-poll the mastro browser-proxy server so `mastro <provider> <cmd>` can run
 // requests through an authenticated tab (past Cloudflare). No-ops when no mastro
@@ -238,6 +239,9 @@ async function maybeComplete() {
 
   s.submitted = true;
   const bundle = serialize(s);
+  // Allow the proxy on this login's sites before mastro's post-login check
+  // runs through it (it starts as soon as the capture is posted).
+  await rememberOrigins(s.manifest);
   const ok = await postCapture(s, bundle);
   recordResult(s, bundle, ok);
   if (ok) {

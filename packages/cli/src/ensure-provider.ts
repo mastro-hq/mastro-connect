@@ -18,6 +18,7 @@ import {
   DEFAULT_REF,
   DEFAULT_REPO,
   fetchProvider,
+  PROVIDER_ID,
   ProviderNotInRepoError,
   type ProviderLockEntry,
 } from "./provider-fetch.ts";
@@ -33,8 +34,6 @@ export interface EnsureOptions {
 
 const installFromCatalog: CatalogInstaller = (id) => fetchProvider(id, DEFAULT_REPO, DEFAULT_REF);
 
-/** Provider ids are directory names in a repo: keep auto-install to plain slugs. */
-const PROVIDER_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export async function ensureProvider(
   ctx: CliContext,

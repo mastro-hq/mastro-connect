@@ -10,11 +10,18 @@
  *   - `handoff`: write localStorage, then open the URL in that tab and focus it
  *     — the CLI staged something (a cart) a human must finish (pay).
  *
+ * Jobs only run for origins the user has logged in to through mastro (see
+ * allowlist.js): whatever answers on the loopback port can't point the
+ * extension at an arbitrary site.
+ *
  * See docs/BROWSER-PROXY.md.
  */
+import { allowedOrigins, isAllowedUrl } from "./allowlist.js";
 
 const PROXY_PORT = 7878; // must match @mastro/core DEFAULT_PROXY_PORT
 const POLL_BASE = `http://127.0.0.1:${PROXY_PORT}`;
+/** Job protocol this extension speaks; the server refuses jobs a client is too old for. */
+const PROTOCOL_VERSION = 2;
 
 let running = false;
 
@@ -30,7 +37,7 @@ async function loop() {
     /** @type {ProxyRequest | null} */
     let request = null;
     try {
-      const res = await fetch(`${POLL_BASE}/proxy/poll`);
+      const res = await fetch(`${POLL_BASE}/proxy/poll?v=${PROTOCOL_VERSION}`);
       if (res.status === 204) continue; // no work this cycle
       if (!res.ok) {
         await sleep(2000);
@@ -51,6 +58,7 @@ async function handleRequest(request) {
   /** @type {ProxyResponse} */
   let response;
   try {
+    await assertAllowed(request);
     const tabId = await tabForOrigin(request.origin);
     response =
       request.kind === "handoff" ? await handoffInTab(tabId, request) : await runFetchInTab(tabId, request);
@@ -66,6 +74,25 @@ async function handleRequest(request) {
     });
   } catch {
     /* server gone; nothing to do */
+  }
+}
+
+/**
+ * Refuse a job whose tab origin or target URL the user hasn't logged in to
+ * through mastro. A handoff must also open a page on its own origin.
+ * @param {ProxyRequest} request
+ */
+async function assertAllowed(request) {
+  const allowed = await allowedOrigins();
+  for (const url of [request.origin, request.url]) {
+    if (!isAllowedUrl(url, allowed)) {
+      throw new Error(
+        `refusing ${new URL(url).origin}: mastro only acts on sites you've logged in to with \`mastro login <provider>\``,
+      );
+    }
+  }
+  if (request.kind === "handoff" && new URL(request.url).origin !== new URL(request.origin).origin) {
+    throw new Error("refusing a handoff to a page outside its own origin");
   }
 }
 
@@ -105,31 +132,36 @@ function waitForComplete(tabId) {
 }
 
 /**
- * Hand off to the user: write the job's localStorage entries in the tab's page
- * context, then navigate the tab to the job's URL and bring it (and its
- * window) to the front.
+ * Hand off to the user: write the job's localStorage entries through a tab on
+ * the origin (storage is per-origin, so any tab there works), then open the
+ * job's URL in a NEW tab and bring it to the front — never navigating away
+ * from a page the user has open.
  * @param {number} tabId
  * @param {ProxyHandoffRequest} request
  * @returns {Promise<ProxyResponse>}
  */
 async function handoffInTab(tabId, request) {
-  await chrome.scripting.executeScript({
+  const [injection] = await chrome.scripting.executeScript({
     target: { tabId },
     world: "MAIN",
     args: [request.local_storage],
     func: writeLocalStorage,
   });
-  const tab = await chrome.tabs.update(tabId, { url: request.url, active: true });
-  if (tab && tab.windowId !== undefined) await chrome.windows.update(tab.windowId, { focused: true });
+  if (!injection || injection.result !== true) throw new Error("could not write the page's storage for the handoff");
+  const tab = await chrome.tabs.create({ url: request.url, active: true });
+  if (tab.windowId !== undefined) await chrome.windows.update(tab.windowId, { focused: true });
   return { status: 200, headers: {}, bodyText: JSON.stringify({ ok: true }) };
 }
 
 /**
- * Runs in the PAGE's MAIN world (serialized + injected).
+ * Runs in the PAGE's MAIN world (serialized + injected). True once every entry
+ * is written.
  * @param {Record<string, string>} entries
+ * @returns {boolean}
  */
 function writeLocalStorage(entries) {
   for (const [key, value] of Object.entries(entries)) window.localStorage.setItem(key, value);
+  return true;
 }
 
 /**

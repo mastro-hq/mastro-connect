@@ -22,7 +22,7 @@ test("relays a request to a poller and resolves with its response", async () => 
 
   // Act as the extension: poll, run the "fetch", post the response.
   const pollerDone = (async () => {
-    const req = await fetch(`${base}/proxy/poll`).then((r) => r.json());
+    const req = await fetch(`${base}/proxy/poll?v=2`).then((r) => r.json());
     expect(req.origin).toBe("https://example.com");
     expect(req.url).toContain("example.com/search");
     await fetch(`${base}/proxy/response/${req.id}`, {
@@ -61,7 +61,7 @@ test("send() rejects on timeout when no extension polls", async () => {
 
 test("a request submitted while a poll is open is delivered to that poll", async () => {
   const { server: s, base } = startServer();
-  const pollPromise = fetch(`${base}/proxy/poll`);
+  const pollPromise = fetch(`${base}/proxy/poll?v=2`);
   await new Promise((r) => setTimeout(r, 50)); // let the poll register
 
   // Swallow the eventual rejection when afterEach stops the server (no response
@@ -79,7 +79,7 @@ test("relays a handoff job (kind, url, local_storage) to the poller", async () =
   const { server, base } = startServer();
 
   const pollerDone = (async () => {
-    const job = await fetch(`${base}/proxy/poll`).then((r) => r.json());
+    const job = await fetch(`${base}/proxy/poll?v=2`).then((r) => r.json());
     expect(job.kind).toBe("handoff");
     expect(job.origin).toBe("https://app.example.com");
     expect(job.local_storage).toEqual({ cartKey: "k-1" });
@@ -101,4 +101,75 @@ test("relays a handoff job (kind, url, local_storage) to the poller", async () =
   );
   await pollerDone;
   expect(res.status).toBe(200);
+});
+
+test("an extension too old for the protocol (no allowlist, no handoff) gets no jobs", async () => {
+  const { server, base } = startServer();
+  const outcome = settle(
+    server.send(
+      { kind: "handoff", origin: "https://app.example.com", url: "https://app.example.com/cart", local_storage: {} },
+      5000,
+    ),
+  );
+  // A pre-handoff extension polls without ?v=.
+  const poll = await fetch(`${base}/proxy/poll`);
+  expect(poll.status).toBe(204);
+  expect(await outcome).toMatch(/extension is out of date/);
+});
+
+/** A send's outcome as text — its rejection message, or "resolved" — handled from the start. */
+function settle(p: Promise<unknown>): Promise<string> {
+  return p.then(
+    () => "resolved",
+    (err: unknown) => (err instanceof Error ? err.message : String(err)),
+  );
+}
+
+const FETCH_JOB = {
+  kind: "fetch",
+  origin: "https://example.com",
+  method: "GET",
+  url: "https://example.com/",
+  headers: { authorization: "Bearer secret" },
+} as const;
+
+test("a web page can't poll: a non-extension Origin is refused, and no CORS headers are served", async () => {
+  const { server, base } = startServer();
+  server.send(FETCH_JOB, 2000).catch(() => {});
+  const res = await fetch(`${base}/proxy/poll`, { headers: { origin: "https://evil.example" } });
+  expect(res.status).toBe(403);
+  expect(res.headers.get("access-control-allow-origin")).toBeNull();
+});
+
+test("requests a browser marks as cross-site are refused", async () => {
+  const { base } = startServer();
+  const res = await fetch(`${base}/proxy/poll`, { headers: { "sec-fetch-site": "cross-site" } });
+  expect(res.status).toBe(403);
+});
+
+test("a rebinding Host header is refused", async () => {
+  const { base } = startServer();
+  const res = await fetch(`${base}/proxy/poll`, { headers: { host: "evil.example" } });
+  expect(res.status).toBe(403);
+});
+
+test("a malformed posted response fails the job instead of resolving it", async () => {
+  const { server, base } = startServer();
+  const outcome = settle(server.send(FETCH_JOB, 5000));
+  const job = await fetch(`${base}/proxy/poll?v=2`).then((r) => r.json());
+  await fetch(`${base}/proxy/response/${job.id}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "chrome-extension://abc" },
+    body: "{}",
+  });
+  expect(await outcome).toMatch(/malformed/);
+});
+
+test("a timed-out job is not handed to a later poll", async () => {
+  const { server, base } = startServer();
+  await expect(server.send(FETCH_JOB, 100)).rejects.toThrow(/timed out/);
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 300);
+  const poll = await fetch(`${base}/proxy/poll`, { signal: controller.signal }).catch(() => null);
+  expect(poll === null || poll.status === 204).toBe(true);
 });

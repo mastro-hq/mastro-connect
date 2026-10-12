@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -73,5 +73,36 @@ describe("validateDir", () => {
     const dir = exampleCopy();
     edit(join(dir, "openapi.yaml"), "  rate_limit:\n    requests_per_minute: 120\n", "");
     expect(validateDir(dir).warnings[0]).toContain("rate_limit is not set");
+  });
+});
+
+describe("validateDir — safety checks", () => {
+  test("an operation that sends the session to a host the manifest doesn't name", () => {
+    const dir = exampleCopy();
+    // `item` stops being public, so it would carry the session to the API host.
+    edit(join(dir, "openapi.yaml"), "summary: A story, comment, job, or poll by id\n      security: []", "summary: A story, comment, job, or poll by id");
+    expect(validateDir(dir).errors[0]).toContain("item: sends the session to https://hacker-news.firebaseio.com");
+  });
+
+  test("a resolve file outside the connector directory", () => {
+    const dir = exampleCopy();
+    edit(
+      join(dir, "openapi.yaml"),
+      "description: Username (case-sensitive)",
+      'description: Username (case-sensitive)\n          x-mastro-resolve: { from: "file:../../credentials/other.json", keyed: true }',
+    );
+    expect(validateDir(dir).errors).toContain('user --id: x-mastro-resolve file "../../credentials/other.json" is outside the connector directory');
+  });
+
+  test("a rate limit below one request a minute", () => {
+    const dir = exampleCopy();
+    edit(join(dir, "openapi.yaml"), "requests_per_minute: 120", "requests_per_minute: 0");
+    expect(validateDir(dir).errors).toContain("x-mastro-replay.rate_limit.requests_per_minute must be a number ≥ 1");
+  });
+
+  test("a symlink in the connector", () => {
+    const dir = exampleCopy();
+    symlinkSync("/etc/hosts", join(dir, "hosts"));
+    expect(validateDir(dir).errors).toContain("hosts: symlinks aren't allowed in a connector");
   });
 });

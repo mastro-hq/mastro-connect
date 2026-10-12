@@ -9,6 +9,13 @@
  *     and posts the responses back.
  *
  * See docs/BROWSER-PROXY.md. Loopback-only, in-memory, short-lived.
+ *
+ * Only the extension may talk to it. A web page in the user's browser can
+ * reach 127.0.0.1 too, so every request is checked: the Host must be this
+ * loopback port (no DNS rebinding), a browser-set Origin must be an extension,
+ * and Sec-Fetch-Site must not say a web page sent it. No CORS headers are
+ * served — the extension's host permission doesn't need them, and a page
+ * mustn't be able to read a job (it carries session headers).
  */
 import { randomBytes } from "node:crypto";
 import type { Server } from "bun";
@@ -62,6 +69,14 @@ interface Pending {
  * port would change every run). Override with MASTRO_PROXY_PORT.
  */
 export const DEFAULT_PROXY_PORT = 7878;
+
+/**
+ * The job protocol version the extension reports on each poll (`?v=`). Version
+ * 2 added `kind: "handoff"` and the extension's origin allowlist; an older
+ * extension would run a handoff as a plain fetch and enforces no allowlist, so
+ * it gets no jobs at all.
+ */
+export const PROTOCOL_VERSION = 2;
 
 export class ProxyServer {
   private server?: Server<unknown>;
@@ -121,6 +136,9 @@ export class ProxyServer {
     return new Promise<ProxyResponse>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
+        // Never hand a stale job to a later poll.
+        const queued = this.queue.indexOf(full);
+        if (queued !== -1) this.queue.splice(queued, 1);
         reject(new Error("browser proxy timed out waiting for the extension"));
       }, timeoutMs);
 
@@ -141,25 +159,46 @@ export class ProxyServer {
   // -- routing ---------------------------------------------------------------
 
   private async handle(req: Request): Promise<Response> {
+    if (!this.fromExtension(req)) return new Response("forbidden", { status: 403 });
     const url = new URL(req.url);
     const { pathname } = url;
 
-    if (req.method === "OPTIONS") return cors(new Response(null, { status: 204 }));
-
     if (req.method === "GET" && pathname === "/proxy/poll") {
       this.extensionSeen = true;
-      const next = await this.nextRequest(25_000);
-      return next ? cors(json(next)) : cors(new Response(null, { status: 204 }));
+      const version = Number(url.searchParams.get("v") ?? "1");
+      const next = await this.nextRequest(25_000, req.signal);
+      if (!next) return new Response(null, { status: 204 });
+      if (req.signal.aborted) {
+        // The poller hung up while we waited: put the job back for the next one.
+        this.queue.unshift(next);
+        return new Response(null, { status: 204 });
+      }
+      if (!(version >= PROTOCOL_VERSION)) {
+        // An older extension has no origin allowlist and would run a handoff as a fetch.
+        this.fail(next.id, "the mastro extension is out of date — run `mastro extension install`, then hit ↻ on it in chrome://extensions");
+        return new Response(null, { status: 204 });
+      }
+      return json(next);
     }
 
     if (req.method === "POST" && pathname.startsWith("/proxy/response/")) {
       const id = pathname.slice("/proxy/response/".length);
-      const result = (await safeJson(req)) as ProxyResponse | null;
-      this.deliver(id, result);
-      return cors(json({ ok: true }));
+      this.deliver(id, parseProxyResponse(await safeJson(req)));
+      return json({ ok: true });
     }
 
-    return cors(new Response("not found", { status: 404 }));
+    return new Response("not found", { status: 404 });
+  }
+
+  /** Whether a request came from the extension (or a non-browser client), not a web page. */
+  private fromExtension(req: Request): boolean {
+    const port = this.server?.port;
+    const host = req.headers.get("host");
+    if (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`) return false;
+    const origin = req.headers.get("origin");
+    if (origin !== null && !origin.startsWith("chrome-extension://")) return false;
+    const site = req.headers.get("sec-fetch-site");
+    return site === null || site === "none";
   }
 
   // -- queue plumbing --------------------------------------------------------
@@ -170,29 +209,36 @@ export class ProxyServer {
     else this.queue.push(req);
   }
 
-  /** Resolve with the next queued request, or null after `timeoutMs`. */
-  private nextRequest(timeoutMs: number): Promise<ProxyRequest | null> {
+  /**
+   * Resolve with the next queued request, or null after `timeoutMs` — or as
+   * soon as the polling connection goes away, so no job is handed to it.
+   */
+  private nextRequest(timeoutMs: number, signal: AbortSignal): Promise<ProxyRequest | null> {
     const queued = this.queue.shift();
     if (queued) return Promise.resolve(queued);
     return new Promise((resolve) => {
-      const timer = setTimeout(() => {
-        this.waiters = this.waiters.filter((w) => w !== onReq);
-        resolve(null);
-      }, timeoutMs);
-      const onReq = (req: ProxyRequest | null) => {
+      const done = (req: ProxyRequest | null) => {
         clearTimeout(timer);
+        signal.removeEventListener("abort", onAbort);
+        this.waiters = this.waiters.filter((w) => w !== done);
         resolve(req);
       };
-      this.waiters.push(onReq);
+      const timer = setTimeout(() => done(null), timeoutMs);
+      const onAbort = () => done(null);
+      signal.addEventListener("abort", onAbort);
+      this.waiters.push(done);
     });
   }
 
   private deliver(id: string, result: ProxyResponse | null): void {
-    const p = this.pending.get(id);
-    if (!p) return;
+    if (result) this.pending.get(id)?.resolve(result);
+    else this.fail(id, "extension returned a malformed proxy response");
     this.pending.delete(id);
-    if (result) p.resolve(result);
-    else p.reject(new Error("extension returned a malformed proxy response"));
+  }
+
+  private fail(id: string, message: string): void {
+    this.pending.get(id)?.reject(new Error(message));
+    this.pending.delete(id);
   }
 }
 
@@ -211,11 +257,15 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function cors(res: Response): Response {
-  res.headers.set("access-control-allow-origin", "*");
-  res.headers.set("access-control-allow-methods", "POST, GET, OPTIONS");
-  res.headers.set("access-control-allow-headers", "content-type");
-  return res;
+/** A posted response, if it has the right shape: numeric status, string headers, string body. */
+function parseProxyResponse(value: unknown): ProxyResponse | null {
+  if (value === null || typeof value !== "object") return null;
+  const { status, headers, bodyText } = value as Partial<Record<keyof ProxyResponse, unknown>>;
+  if (typeof status !== "number" || typeof bodyText !== "string") return null;
+  if (headers === null || typeof headers !== "object") return null;
+  const clean: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) if (typeof v === "string") clean[k] = v;
+  return { status, headers: clean, bodyText };
 }
 
 async function safeJson(req: Request): Promise<unknown> {

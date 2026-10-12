@@ -45,6 +45,8 @@ export class ProviderRegistry {
     for (const root of this.roots) {
       if (!existsSync(root)) continue;
       for (const name of readdirSync(root)) {
+        // Hidden entries are install staging / lockfiles, never providers.
+        if (name.startsWith(".")) continue;
         const dir = join(root, name);
         if (statSync(dir).isDirectory() && existsSync(join(dir, "auth.manifest.json"))) {
           seen.add(name);

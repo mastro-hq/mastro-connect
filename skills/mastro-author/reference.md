@@ -175,7 +175,13 @@ server-rendered `<form>` (CSRF + hidden fields) from a prior step's HTML.
 ## Validation
 
 `mastro validate <dir>` checks: manifest schema and `provider_id`, spec parses
-as 3.1, unique operationIds/commands, servers present, workflow step/handoff/
+as 3.1, unique operationIds/commands, servers present, every operation that
+sends the session targets an origin the manifest names, workflow step/handoff/
 result references, `${args.*}` reads match declared flags, resolve sources
-exist, skill frontmatter + `mastro-<id>-` prefix, no HARs or live-looking
-tokens. Warns on a missing rate limit, missing README, and write workflows.
+exist inside the connector, regexes compile, a rate limit ≥ 1, skill
+frontmatter + `mastro-<id>-` prefix, no symlinks, HARs or live-looking tokens.
+Warns on a missing rate limit, missing README, and write workflows.
+
+At run time, credentials are only ever sent to the origins recorded at login,
+and the extension only proxies for sites the user logged in to — so list every
+authenticated host in `permissions.host_permissions`.

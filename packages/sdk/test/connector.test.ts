@@ -16,7 +16,7 @@ import {
   type Provider,
 } from "@mastro/core";
 
-import { Connector, NotAuthenticatedError, RecaptureRequiredError } from "../src/index.ts";
+import { Connector, CredentialScopeError, NotAuthenticatedError, RecaptureRequiredError } from "../src/index.ts";
 import { FLIGHT_PEOPLE_STREAM } from "./fixtures/flight-people.ts";
 
 // -- a tiny mock Depop-ish API ---------------------------------------------
@@ -169,7 +169,12 @@ function makeProvider(origin: string): Provider {
       },
     },
   };
-  const manifest = { provider_id: "mock", display_name: "Mock" } as Provider["manifest"];
+  const manifest = {
+    provider_id: "mock",
+    display_name: "Mock",
+    launch: { url: `${origin}/`, expected_origins: [origin], timeout_seconds: 60 },
+    permissions: { host_permissions: [`${origin}/*`] },
+  } as Provider["manifest"];
   return { id: `mock-${process.pid}`, dir: "/tmp/mock", manifest, spec: new OpenApiSpec(doc) };
 }
 
@@ -310,4 +315,19 @@ test("anonymous load runs public operations with no stored credential", async ()
   const connector = Connector.load(provider, storeWith(undefined), { anonymous: true });
   const result = await connector.call(connector.byCommand("parks")!, { q: "x" });
   expect(result.data).toEqual([{ id: 7, q: "x" }]);
+});
+
+test("the session never leaves the origins recorded at login", async () => {
+  const provider = makeProvider(server.url.origin);
+  // Logged in for another site; a later spec now points this command here.
+  const cred: PersistedCredential = {
+    ...validCred,
+    fields: { access_token: "tok-1234567890", user_id: "42" },
+    origins: ["https://www.example.com"],
+  };
+  const connector = Connector.load(provider, storeWith(cred));
+  lastRequest = undefined;
+  const outcome = await connector.call(connector.byCommand("search")!, { what: "x" }).catch((e: unknown) => e);
+  expect(outcome).toBeInstanceOf(CredentialScopeError);
+  expect(lastRequest).toBeUndefined();
 });

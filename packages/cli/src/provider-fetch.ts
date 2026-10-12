@@ -10,11 +10,13 @@
  * recorded in `~/.mastro/providers/.lock.json` so `mastro providers update`
  * can re-fetch from the same repo/ref later.
  *
- * Connector repos may be private: every call goes through api.github.com with
- * a token from GITHUB_TOKEN / GH_TOKEN, else `gh auth token`, when one exists.
+ * Public repos are read anonymously and without the REST API (see
+ * `snapshot`); a private repo falls back to the API with a token from
+ * GITHUB_TOKEN / GH_TOKEN, else `gh auth token` — sent only to api.github.com.
  */
-import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { randomBytes } from "node:crypto";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 
 import { UsageError } from "./args.ts";
 import { userProvidersDir } from "./context.ts";
@@ -50,6 +52,9 @@ export class ProviderNotInRepoError extends UsageError {
   }
 }
 
+/** Provider ids are directory names: plain slugs only (no dots, slashes, or leading dash). */
+export const PROVIDER_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
 export interface RemoteProvider {
   id: string;
   display_name: string;
@@ -57,16 +62,14 @@ export interface RemoteProvider {
 
 /** The connectors a repo offers at `ref`: every providers/<id>/ with a manifest. */
 export async function listRemoteProviders(repo: string, ref: string): Promise<RemoteProvider[]> {
-  const commit = await resolveCommit(repo, ref);
-  const ids = (await listTree(repo, commit))
-    .map((p) => p.match(/^providers\/([^/]+)\/auth\.manifest\.json$/)?.[1])
-    .filter((id): id is string => id !== undefined);
-  return Promise.all(
-    ids.map(async (id) => {
-      const body = await download(repo, commit, `providers/${id}/auth.manifest.json`);
-      return { id, display_name: displayName(new TextDecoder().decode(body)) ?? id };
-    }),
-  );
+  const { files } = await snapshot(repo, ref);
+  const out: RemoteProvider[] = [];
+  for (const [path, body] of files) {
+    const id = path.match(/^providers\/([^/]+)\/auth\.manifest\.json$/)?.[1];
+    if (id === undefined || !PROVIDER_ID.test(id)) continue;
+    out.push({ id, display_name: displayName(new TextDecoder().decode(body)) ?? id });
+  }
+  return out.sort((a, b) => a.id.localeCompare(b.id));
 }
 
 function displayName(manifestText: string): string | undefined {
@@ -81,28 +84,46 @@ function displayName(manifestText: string): string | undefined {
   return undefined;
 }
 
-/** Download providers/<id>/ at `ref` into ~/.mastro/providers/<id>. */
+/** Caps: a connector is a few small text files; a catalog snapshot is a small repo. */
+const MAX_FILE_BYTES = 5_000_000;
+const MAX_PROVIDER_BYTES = 20_000_000;
+const MAX_ARCHIVE_BYTES = 50_000_000;
+
+/**
+ * Download providers/<id>/ at `ref` into ~/.mastro/providers/<id>.
+ *
+ * Atomic: files land in a hidden staging directory that is renamed into place
+ * only once complete, so a crash, a full disk, or two agents installing the
+ * same connector at once never leave a half-written connector behind.
+ */
 export async function fetchProvider(id: string, repo: string, ref: string): Promise<ProviderLockEntry> {
-  const commit = await resolveCommit(repo, ref);
+  if (!PROVIDER_ID.test(id)) throw new UsageError(`"${id}" isn't a valid connector id`);
+  const { commit, files } = await snapshot(repo, ref);
   const prefix = `providers/${id}/`;
-  const paths = (await listTree(repo, commit)).filter((p) => p.startsWith(prefix));
+  const paths = [...files.keys()].filter((p) => p.startsWith(prefix));
   if (paths.length === 0) throw new ProviderNotInRepoError(id, repo, ref);
 
-  const destRoot = join(userProvidersDir(), id);
-  const staged: Array<{ dest: string; body: Uint8Array }> = [];
-  for (const path of paths) {
-    const rel = path.slice(prefix.length);
-    if (rel.split("/").some((seg) => seg === "..")) {
-      throw new FetchError(`refusing path traversal in repo tree: ${path}`);
+  const root = userProvidersDir();
+  mkdirSync(root, { recursive: true });
+  const staging = join(root, `.staging-${id}-${process.pid}-${randomBytes(4).toString("hex")}`);
+  try {
+    let total = 0;
+    for (const path of paths) {
+      const rel = path.slice(prefix.length);
+      if (rel.split("/").some((seg) => seg === ".." || seg === "")) {
+        throw new FetchError(`refusing path traversal in repo tree: ${path}`);
+      }
+      const body = files.get(path)!;
+      if (body.byteLength > MAX_FILE_BYTES) throw new FetchError(`${path} is larger than ${MAX_FILE_BYTES} bytes`);
+      total += body.byteLength;
+      if (total > MAX_PROVIDER_BYTES) throw new FetchError(`connector "${id}" is larger than ${MAX_PROVIDER_BYTES} bytes`);
+      const dest = join(staging, rel);
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, body);
     }
-    staged.push({ dest: join(destRoot, rel), body: await download(repo, commit, path) });
-  }
-
-  // All downloads succeeded — only now replace the local copy.
-  rmSync(destRoot, { recursive: true, force: true });
-  for (const { dest, body } of staged) {
-    mkdirSync(dirname(dest), { recursive: true });
-    writeFileSync(dest, body);
+    swapIntoPlace(staging, join(root, id));
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
   }
 
   const entry: ProviderLockEntry = { repo, ref, commit, fetched_at: new Date().toISOString() };
@@ -110,10 +131,36 @@ export async function fetchProvider(id: string, repo: string, ref: string): Prom
   return entry;
 }
 
+/** Replace `dest` with the complete `staging` directory using renames only. */
+function swapIntoPlace(staging: string, dest: string): void {
+  const old = `${dirname(dest)}/.old-${basename(dest)}-${process.pid}-${randomBytes(4).toString("hex")}`;
+  try {
+    renameSync(dest, old);
+  } catch (err) {
+    if (!isErrno(err, "ENOENT")) throw err; // first install: nothing to move aside
+  }
+  try {
+    renameSync(staging, dest);
+  } catch (err) {
+    // A concurrent install of the same connector got there first: keep theirs.
+    if (!isErrno(err, "ENOTEMPTY") && !isErrno(err, "EEXIST")) throw err;
+  } finally {
+    rmSync(old, { recursive: true, force: true });
+  }
+}
+
+function isErrno(err: unknown, code: string): boolean {
+  return err instanceof Error && "code" in err && err.code === code;
+}
+
+/** The lockfile, or {} if it's missing or unreadable (it's a cache of where things came from). */
 export function readLock(): ProviderLock {
-  const path = lockPath();
-  if (!existsSync(path)) return {};
-  const data: unknown = JSON.parse(readFileSync(path, "utf8"));
+  let data: unknown;
+  try {
+    data = JSON.parse(readFileSync(lockPath(), "utf8"));
+  } catch {
+    return {};
+  }
   if (data === null || typeof data !== "object") return {};
   const lock: ProviderLock = {};
   for (const [id, value] of Object.entries(data)) {
@@ -137,92 +184,146 @@ function parseLockEntry(value: unknown): ProviderLockEntry | undefined {
   return { repo, ref, commit, fetched_at };
 }
 
+/** Read-modify-write the lockfile, replacing it atomically (write a temp file, rename over). */
 function writeLockEntry(id: string, entry: ProviderLockEntry): void {
   const lock = readLock();
   lock[id] = entry;
   mkdirSync(userProvidersDir(), { recursive: true });
-  writeFileSync(lockPath(), JSON.stringify(lock, null, 2) + "\n");
+  const tmp = `${lockPath()}.${process.pid}-${randomBytes(4).toString("hex")}`;
+  writeFileSync(tmp, JSON.stringify(lock, null, 2) + "\n");
+  renameSync(tmp, lockPath());
 }
 
 function lockPath(): string {
   return join(userProvidersDir(), ".lock.json");
 }
 
-/** GET api.github.com commit for `ref` → full sha. */
-async function resolveCommit(repo: string, ref: string): Promise<string> {
-  const data = await getJson(`https://api.github.com/repos/${repo}/commits/${ref}`);
-  if (data !== null && typeof data === "object" && "sha" in data && typeof data.sha === "string") {
-    return data.sha;
+// -- fetching a repo snapshot ------------------------------------------------
+//
+// A public repo is read without GitHub's REST API (60 calls/hour per IP for
+// anonymous clients — a shared office network would exhaust it on launch day):
+// the branch is resolved through git's own smart-HTTP ref advertisement, and
+// the files come from one codeload tarball at that commit. Two plain requests,
+// one consistent snapshot. A private repo (401 there) goes through the API
+// with the user's token instead.
+
+interface Snapshot {
+  commit: string;
+  /** Repo-relative path → file bytes. */
+  files: Map<string, Uint8Array>;
+}
+
+const snapshots = new Map<string, Promise<Snapshot>>();
+
+/** The repo's files at `ref`, fetched once per process (setup installs several connectors). */
+function snapshot(repo: string, ref: string): Promise<Snapshot> {
+  const key = `${repo}@${ref}`;
+  let pending = snapshots.get(key);
+  if (!pending) {
+    pending = loadSnapshot(repo, ref);
+    snapshots.set(key, pending);
+    pending.catch(() => snapshots.delete(key));
   }
+  return pending;
+}
+
+async function loadSnapshot(repo: string, ref: string): Promise<Snapshot> {
+  const anonymous = await resolveAnonymously(repo, ref);
+  if (anonymous) {
+    const res = await github(`https://codeload.github.com/${repo}/tar.gz/${anonymous}`, {}, undefined);
+    if (!res.ok) throw new FetchError(`couldn't download ${repo}@${anonymous.slice(0, 7)} (${res.status})`);
+    return { commit: anonymous, files: await unpack(res) };
+  }
+  const token = githubToken();
+  if (!token) {
+    throw new FetchError(
+      `couldn't read ${repo}@${ref} — if the repo is private, set GITHUB_TOKEN or run \`gh auth login\`.`,
+    );
+  }
+  const commit = await resolveCommitViaApi(repo, ref, token);
+  const res = await github(`https://api.github.com/repos/${repo}/tarball/${commit}`, {}, token);
+  if (!res.ok) throw new FetchError(`couldn't download ${repo}@${commit.slice(0, 7)} (${res.status})`);
+  return { commit, files: await unpack(res) };
+}
+
+const FULL_SHA = /^[0-9a-f]{40}$/;
+
+/**
+ * The commit `ref` names, from git's smart-HTTP ref advertisement — no API
+ * quota, no token. A full sha resolves to itself. Undefined when the repo
+ * isn't publicly readable (private, or missing) or `ref` isn't a branch/tag.
+ */
+async function resolveAnonymously(repo: string, ref: string): Promise<string | undefined> {
+  if (FULL_SHA.test(ref)) return ref;
+  const res = await github(`https://github.com/${repo}.git/info/refs?service=git-upload-pack`, {}, undefined);
+  if (res.status === 401 || res.status === 404) return undefined;
+  if (!res.ok) throw new FetchError(`couldn't list ${repo}'s branches (${res.status})`);
+  const wanted = new Set([`refs/heads/${ref}`, `refs/tags/${ref}^{}`, `refs/tags/${ref}`]);
+  let tag: string | undefined;
+  for (const line of (await res.text()).split("\n")) {
+    const match = line.match(/([0-9a-f]{40}) ([^\s\0]+)/);
+    if (!match || !wanted.has(match[2]!)) continue;
+    if (match[2] === `refs/heads/${ref}` || match[2] === `refs/tags/${ref}^{}`) return match[1]!;
+    tag = match[1]; // a lightweight tag (no peeled ^{} line)
+  }
+  return tag;
+}
+
+/** GET api.github.com commit for `ref` → full sha (private repos). */
+async function resolveCommitViaApi(repo: string, ref: string, token: string): Promise<string> {
+  const res = await github(
+    `https://api.github.com/repos/${repo}/commits/${encodeURIComponent(ref)}`,
+    { Accept: "application/vnd.github+json" },
+    token,
+  );
+  if (res.status === 404) {
+    throw new FetchError(`GitHub returned 404 for ${repo}@${ref} — check the repo/ref, and that your token can read the repo.`);
+  }
+  if (res.status === 401) throw new FetchError("GitHub rejected the token (401) — refresh GITHUB_TOKEN / `gh auth login`.");
+  if (res.status === 403 || res.status === 429) throw new FetchError("GitHub API rate limit hit — try again in a few minutes.");
+  if (!res.ok) throw new FetchError(`GitHub API error ${res.status} for ${repo}@${ref}`);
+  const data: unknown = await res.json();
+  if (data !== null && typeof data === "object" && "sha" in data && typeof data.sha === "string") return data.sha;
   throw new FetchError(`unexpected commit response from GitHub for ${repo}@${ref}`);
 }
 
-/** All blob paths in the repo tree at `commit`. */
-async function listTree(repo: string, commit: string): Promise<string[]> {
-  const data = await getJson(
-    `https://api.github.com/repos/${repo}/git/trees/${commit}?recursive=1`,
-  );
-  if (data === null || typeof data !== "object" || !("tree" in data) || !Array.isArray(data.tree)) {
-    throw new FetchError(`unexpected tree response from GitHub for ${repo}@${commit}`);
-  }
-  const paths: string[] = [];
-  for (const node of data.tree) {
-    if (
-      node !== null &&
-      typeof node === "object" &&
-      "type" in node &&
-      node.type === "blob" &&
-      "path" in node &&
-      typeof node.path === "string"
-    ) {
-      paths.push(node.path);
+/**
+ * A GitHub tarball's regular files, keyed by repo-relative path (the archive's
+ * single top-level `<repo>-<sha>/` directory stripped). Entries that try to
+ * climb out (`..`) are rejected.
+ */
+async function unpack(res: Response): Promise<Map<string, Uint8Array>> {
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.byteLength > MAX_ARCHIVE_BYTES) throw new FetchError(`repository archive is larger than ${MAX_ARCHIVE_BYTES} bytes`);
+  const entries = await new Bun.Archive(bytes).files();
+  const files = new Map<string, Uint8Array>();
+  for (const [path, file] of entries) {
+    const rel = path.split("/").slice(1).join("/");
+    if (rel === "") continue;
+    // `\` and `:` would be path separators / drive letters on Windows.
+    if (/[\\:]/.test(rel) || rel.split("/").some((seg) => seg === ".." || seg === "")) {
+      throw new FetchError(`refusing path traversal in repository archive: ${path}`);
     }
+    files.set(rel, new Uint8Array(await file.arrayBuffer()));
   }
-  return paths;
+  return files;
 }
 
-async function download(repo: string, commit: string, path: string): Promise<Uint8Array> {
-  const encoded = path.split("/").map(encodeURIComponent).join("/");
-  const res = await github(`https://api.github.com/repos/${repo}/contents/${encoded}?ref=${commit}`, {
-    Accept: "application/vnd.github.raw",
-  });
-  if (!res.ok) throw new FetchError(`download failed (${res.status}) for ${path}`);
-  return new Uint8Array(await res.arrayBuffer());
-}
-
-async function getJson(url: string): Promise<unknown> {
-  const res = await github(url, { Accept: "application/vnd.github+json" });
-  if (res.status === 404) {
-    throw new FetchError(
-      githubToken()
-        ? `GitHub returned 404 for ${url} — check the repo/ref, and that your token can read the repo.`
-        : `GitHub returned 404 for ${url} — if the repo is private, set GITHUB_TOKEN or run \`gh auth login\`.`,
-    );
+/** A GitHub request with a timeout; network failures become a readable FetchError. */
+async function github(url: string, headers: Record<string, string>, token: string | undefined): Promise<Response> {
+  try {
+    return await fetch(url, {
+      signal: AbortSignal.timeout(20_000),
+      headers: {
+        "User-Agent": "mastro-connect",
+        ...headers,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+  } catch (err) {
+    const why = err instanceof Error && err.name === "TimeoutError" ? "timed out" : "failed";
+    throw new FetchError(`couldn't reach GitHub (${new URL(url).host}): request ${why} — are you online?`);
   }
-  if (res.status === 401) {
-    throw new FetchError("GitHub rejected the token (401) — refresh GITHUB_TOKEN / `gh auth login`.");
-  }
-  if (res.status === 403 || res.status === 429) {
-    throw new FetchError(
-      githubToken()
-        ? "GitHub API rate limit hit — try again in a few minutes."
-        : "GitHub API rate limit hit — set GITHUB_TOKEN or run `gh auth login` for a higher limit.",
-    );
-  }
-  if (!res.ok) throw new FetchError(`GitHub API error ${res.status} for ${url}`);
-  return res.json();
-}
-
-function github(url: string, headers: Record<string, string>): Promise<Response> {
-  const token = githubToken();
-  return fetch(url, {
-    headers: {
-      "User-Agent": "mastro-connect",
-      "X-GitHub-Api-Version": "2022-11-28",
-      ...headers,
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
 }
 
 let cachedToken: string | null | undefined;

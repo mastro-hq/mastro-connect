@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "mastro · connect",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "description": "Captures a browser session for mastro-connect and posts a minimal credential bundle to the local mastro receiver.",
   "permissions": ["tabs", "cookies", "webRequest", "storage", "scripting"],
   "host_permissions": ["http://127.0.0.1/*", "http://localhost/*", "<all_urls>"],

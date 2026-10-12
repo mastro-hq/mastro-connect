@@ -221,3 +221,16 @@ test("metaRefreshUrl handles unquoted targets and ignores everything else", () =
   // A real (large) document mentioning a refresh in content must not match.
   expect(metaRefreshUrl("x".repeat(20_000) + '<meta http-equiv="refresh" content="0; url=/y">')).toBeUndefined();
 });
+
+test("a selector list stays inside its item (no field borrowed from elsewhere on the page)", async () => {
+  const spec = {
+    items: "div.card",
+    fields: { name: { selector: "b" }, price: { selector: ".p2, .price" } },
+  } satisfies MastroExtract;
+  const page = `
+    <div class="card"><b>A</b><span class="price">$1</span></div>
+    <div class="card"><b>B</b></div>
+    <footer><span class="price">$999</span></footer>`;
+  const items = await extractItems(page, spec);
+  expect(items).toEqual([{ name: "A", price: "$1" }, { name: "B", price: null }]);
+});

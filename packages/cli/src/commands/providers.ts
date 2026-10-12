@@ -6,6 +6,8 @@
  *   mastro providers add <id>...     fetch latest from a GitHub connector repo into ~/.mastro/providers
  *   mastro providers update [id...]  re-fetch previously added providers
  */
+import type { Provider } from "@mastro/core";
+
 import { UsageError } from "../args.ts";
 import type { CliContext } from "../context.ts";
 import { emit, pc, ui } from "../output.ts";
@@ -30,18 +32,24 @@ export async function providers(ctx: CliContext, rest: string[], asJson: boolean
 
 async function list(ctx: CliContext, asJson: boolean): Promise<number> {
   const lock = readLock();
-  const ids = ctx.registry.list();
-  const rows = ids.map((id) => {
-    const p = ctx.registry.load(id);
-    const loggedIn = ctx.store.get(id) !== undefined;
-    return {
+  const rows = [];
+  for (const id of ctx.registry.list()) {
+    let p: Provider;
+    try {
+      p = ctx.registry.load(id);
+    } catch (err) {
+      // One broken connector shouldn't hide the rest.
+      ui.warn(`${id}: ${err instanceof Error ? err.message : String(err)}`);
+      continue;
+    }
+    rows.push({
       id,
       display_name: p.manifest.display_name,
       has_api: p.spec !== undefined,
-      logged_in: loggedIn,
+      logged_in: ctx.store.get(id) !== undefined,
       fetched: lock[id]?.commit.slice(0, 7),
-    };
-  });
+    });
+  }
 
   if (asJson) {
     await emit(rows, true);

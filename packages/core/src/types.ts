@@ -178,6 +178,12 @@ export interface PersistedCredential {
   expires_at?: number;
   /** The credential fields, ready to feed into OpenAPI x-mastro-auth templates. */
   fields: Record<string, unknown>;
+  /**
+   * Origins the user consented to at login (the manifest's, at capture time).
+   * Credential values are only ever sent to these, whatever a later connector
+   * update's spec says. Absent on credentials captured before 0.2.2.
+   */
+  origins?: string[];
   browser_context?: CaptureBundle["browser_context"];
   validation?: ValidationResult;
 }

@@ -57,7 +57,8 @@ mastro skills add <provider>/<skill>    # one skill
 ## Missing a connector?
 
 - Connectors from the community catalog install themselves the first time
-  you call them (a one-line notice on stderr). `mastro providers --json`
+  you call them (a one-line "installed …" notice — on stderr under `--json`,
+  so the JSON stays clean). `mastro providers --json`
   shows what's installed; `mastro providers available --json` shows the
   catalog. Other repos:
   `--repo <owner>/<repo>` (private repos use `GITHUB_TOKEN` or the user's

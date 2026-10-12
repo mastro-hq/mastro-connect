@@ -12,7 +12,7 @@
  * opens chrome://extensions, turning "find the folder" into "Load unpacked, paste".
  */
 import { spawn, spawnSync } from "node:child_process";
-import { cpSync, existsSync } from "node:fs";
+import { cpSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { UsageError } from "../args.ts";
@@ -44,6 +44,28 @@ function installedDir(): string {
 /** True once `mastro extension install` has copied the extension into place. */
 export function extensionInstalled(): boolean {
   return existsSync(join(installedDir(), "manifest.json"));
+}
+
+/**
+ * True when the installed extension is older than the one this mastro ships
+ * (e.g. installed before an upgrade): it may not speak the current proxy
+ * protocol or enforce the current origin allowlist.
+ */
+export function extensionOutdated(): boolean {
+  const installed = manifestVersion(join(installedDir(), "manifest.json"));
+  const bundled = manifestVersion(join(packageRoot(), "extension", "manifest.json"));
+  return installed !== undefined && bundled !== undefined && installed !== bundled;
+}
+
+function manifestVersion(path: string): string | undefined {
+  try {
+    const data: unknown = JSON.parse(readFileSync(path, "utf8"));
+    return data !== null && typeof data === "object" && "version" in data && typeof data.version === "string"
+      ? data.version
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function installExtension(asJson: boolean, open: boolean): Promise<number> {

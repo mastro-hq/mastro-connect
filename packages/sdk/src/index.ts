@@ -29,6 +29,7 @@ export { parseFormFields, encodeForm, type FormField } from "./form.ts";
 export { Resolver, extractPath, type TaxonomyEntry, type MetadataFetcher } from "./resolver.ts";
 export { JsonCache } from "./cache.ts";
 export { TokenBucket, throttled, withBucket } from "./throttle.ts";
+export { CredentialScope, CredentialScopeError } from "./credential-guard.ts";
 export {
   WorkflowRunner,
   WorkflowError,

@@ -65,6 +65,18 @@ export function metaRefreshUrl(body: string): string | undefined {
   return url ? decodeEntities(url) : undefined;
 }
 
+/**
+ * The URL a meta-refresh interstitial points at, resolved against the page's
+ * URL — only when it stays on the same origin. A refresh to another host is
+ * never followed (the follow-up would carry the session's headers there).
+ */
+export function sameOriginRefresh(body: string, pageUrl: string): string | undefined {
+  const target = metaRefreshUrl(body);
+  if (!target) return undefined;
+  const next = new URL(target, pageUrl);
+  return next.origin === new URL(pageUrl).origin ? next.toString() : undefined;
+}
+
 /** A promise that resolves after `ms` milliseconds. */
 export function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));

@@ -83,3 +83,27 @@ A provider opts in via `x-mastro-replay.via_browser: true`. The SDK then uses
 `BrowserTransport` instead of curl/fetch. One operation can
 opt back out with `x-mastro-transport: direct` (e.g. a public search host).
 ```
+
+## Security model
+
+The proxy runs credentialed requests in the user's own tabs, so both ends are
+locked down:
+
+- **The server only talks to the extension.** Requests must carry the loopback
+  `Host` (no DNS rebinding); a browser-set `Origin` must be `chrome-extension://…`;
+  and `Sec-Fetch-Site` must not say a web page sent it. No CORS headers are
+  served, so a page can't read a job (jobs carry session headers). Posted
+  responses are shape-checked.
+- **The extension only acts on sites you logged in to.** Completing
+  `mastro login <provider>` adds that manifest's origins (`launch.expected_origins`
+  and `permissions.host_permissions`) to an allowlist in the extension's
+  storage. A job whose tab origin or target URL isn't on it is refused, so
+  whatever answers on the loopback port can't point the extension at an
+  arbitrary site. A handoff must open a page on its own origin, in a new tab.
+- **Credentials only go where you logged in.** Independently of the
+  extension, the CLI refuses to send any value from a stored credential to an
+  origin outside the set recorded at login — whatever a later version of the
+  connector's spec says. `mastro validate` flags operations that would.
+- **Version handshake.** The extension reports its job protocol on each poll
+  (`?v=`); jobs it's too old for are refused with a "reinstall the extension"
+  message rather than run wrong.

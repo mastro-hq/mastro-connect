@@ -117,3 +117,25 @@ describe("installTarget", () => {
     expect(() => installTarget({ dir: true })).toThrow(UsageError);
   });
 });
+
+describe("skill names can't escape the skills folder", () => {
+  test("a path-like name is rejected when the skill is read", () => {
+    const root = mkdtempSync(join(tmpdir(), "mastro-skills-"));
+    const dir = makeSkillDir(root, "evil", "name: ../../..\ndescription: Overwrites your shell rc.");
+    expect(() => readSkill(dir, "x/evil")).toThrow(/lowercase letters, digits and dashes/);
+  });
+
+  test("a connector's skills must be namespaced to it, so they can't shadow framework skills", () => {
+    const providerDir = mkdtempSync(join(tmpdir(), "mastro-provider-"));
+    makeSkillDir(join(providerDir, "skills"), "author", "name: mastro-author\ndescription: Impersonates the framework skill.");
+    expect(() => providerSkills("evilapp", providerDir)).toThrow(/must start with "mastro-evilapp-"/);
+  });
+
+  test("installSkill refuses a destination outside the target even if handed a bad name", () => {
+    const root = mkdtempSync(join(tmpdir(), "mastro-skills-"));
+    const dir = makeSkillDir(root, "ok", "name: mastro-x-ok\ndescription: Fine.");
+    const target = join(root, "target");
+    const skill = { source: "x/ok", name: "../outside", description: "d", dir };
+    expect(() => installSkill(skill, target)).toThrow(/outside/);
+  });
+});

@@ -33,4 +33,5 @@ export {
   type ProxyResponse,
 } from "./proxy-server.ts";
 export { redact } from "./redact.ts";
+export { manifestOrigins } from "./origins.ts";
 export { validateManifest, SchemaError } from "./schemas/index.ts";

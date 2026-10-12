@@ -134,7 +134,7 @@ interface ProxyFetchRequest {
   body?: string;
 }
 
-/** Write localStorage on `origin`, then open `url` in that tab and focus it. */
+/** Write localStorage on `origin`, then open `url` (same origin) in a new tab and focus it. */
 interface ProxyHandoffRequest {
   kind: "handoff";
   id: string;

@@ -8,13 +8,15 @@
  * cookies committed, a rate limit set). Exits 1 when any error is found, so it
  * doubles as a connector repo's CI check.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, join, relative, resolve } from "node:path";
+import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { basename, join, relative, resolve, sep } from "node:path";
 
 import {
+  manifestOrigins,
   OpenApiSpec,
   parseOpenApi,
   validateManifest,
+  type AuthManifest,
   type MastroResolve,
   type MastroWorkflow,
   type OperationView,
@@ -64,14 +66,17 @@ export function validateDir(dir: string): ValidationReport {
   const report: ValidationReport = { provider: id, dir, commands: 0, errors: [], warnings: [] };
   const { errors, warnings } = report;
 
-  checkManifest(dir, id, errors);
+  const manifest = checkManifest(dir, id, errors);
 
   const specFile = SPEC_FILES.find((f) => existsSync(join(dir, f)));
   if (!specFile) {
     warnings.push("no openapi.yaml — only `mastro login` will work for this connector");
   } else {
     const spec = loadSpec(join(dir, specFile), errors);
-    if (spec) report.commands = checkSpec(spec, dir, errors, warnings);
+    if (spec) {
+      report.commands = checkSpec(spec, dir, errors, warnings);
+      if (manifest) checkCredentialHosts(spec, manifestOrigins(manifest), errors);
+    }
   }
 
   checkSkills(dir, id, errors);
@@ -80,19 +85,68 @@ export function validateDir(dir: string): ValidationReport {
   return report;
 }
 
-function checkManifest(dir: string, id: string, errors: string[]): void {
+function checkManifest(dir: string, id: string, errors: string[]): AuthManifest | undefined {
   const path = join(dir, "auth.manifest.json");
   if (!existsSync(path)) {
     errors.push("auth.manifest.json is missing");
-    return;
+    return undefined;
   }
   try {
     const manifest = validateManifest(JSON.parse(readFileSync(path, "utf8")));
     if (manifest.provider_id !== id) {
       errors.push(`auth.manifest.json provider_id "${manifest.provider_id}" doesn't match the directory name "${id}"`);
     }
+    return manifest;
   } catch (err) {
     errors.push(message(err));
+    return undefined;
+  }
+}
+
+/**
+ * Every operation that sends the session must target an origin the manifest
+ * names — at run time mastro refuses to send credentials anywhere else.
+ */
+function checkCredentialHosts(spec: OpenApiSpec, origins: readonly string[], errors: string[]): void {
+  for (const op of spec.all()) {
+    if (op.isPublic || op.isWorkflow) continue;
+    let origin: string;
+    try {
+      origin = new URL(spec.baseUrlFor(op)).origin;
+    } catch {
+      continue; // a missing/invalid server is reported by checkSpec
+    }
+    if (!origins.includes(origin)) {
+      errors.push(
+        `${op.command ?? op.id}: sends the session to ${origin}, which auth.manifest.json doesn't name ` +
+          "(add it to permissions.host_permissions, or mark the operation `security: []` if it's public)",
+      );
+    }
+  }
+}
+
+/** Regexes a connector ships (extract patterns, workflow output.extract) must compile. */
+function checkRegexes(op: OperationView, where: string, errors: string[]): void {
+  const patterns: string[] = [];
+  const extract = op.operation["x-mastro-extract"];
+  if (extract && extract.format !== "flight") {
+    for (const field of Object.values(extract.fields)) {
+      if ("each" in field) {
+        for (const sub of Object.values(field.fields)) if (sub.pattern) patterns.push(sub.pattern);
+      } else if (field.pattern) {
+        patterns.push(field.pattern);
+      }
+    }
+  }
+  for (const step of op.operation["x-mastro-workflow"]?.steps ?? []) {
+    if (step.output?.extract) patterns.push(step.output.extract);
+  }
+  for (const pattern of patterns) {
+    try {
+      new RegExp(pattern);
+    } catch (err) {
+      errors.push(`${where}: regex ${JSON.stringify(pattern)} doesn't compile: ${message(err)}`);
+    }
   }
 }
 
@@ -165,10 +219,14 @@ function checkSpec(spec: OpenApiSpec, dir: string, errors: string[], warnings: s
 
     const workflow = op.operation["x-mastro-workflow"];
     if (workflow) checkWorkflow(workflow, spec, where, errors, warnings);
+    checkRegexes(op, where, errors);
   }
 
-  if (!spec.replay().rate_limit) {
+  const rateLimit = spec.replay().rate_limit;
+  if (!rateLimit) {
     warnings.push("x-mastro-replay.rate_limit is not set — set requests_per_minute to keep calls at a human pace");
+  } else if (!(typeof rateLimit.requests_per_minute === "number" && rateLimit.requests_per_minute >= 1)) {
+    errors.push("x-mastro-replay.rate_limit.requests_per_minute must be a number ≥ 1");
   }
   return spec.commands().length;
 }
@@ -223,7 +281,12 @@ function checkResolve(
   const { from } = resolveSpec;
   if (from.startsWith("file:")) {
     const rel = from.slice("file:".length);
-    if (!existsSync(join(dir, rel))) errors.push(`${where}: x-mastro-resolve file "${rel}" doesn't exist`);
+    const path = resolve(dir, rel);
+    if (!path.startsWith(resolve(dir) + sep)) {
+      errors.push(`${where}: x-mastro-resolve file "${rel}" is outside the connector directory`);
+    } else if (!existsSync(path)) {
+      errors.push(`${where}: x-mastro-resolve file "${rel}" doesn't exist`);
+    }
   } else if (!spec.byOperationId(from)) {
     errors.push(`${where}: x-mastro-resolve from unknown operationId "${from}"`);
   }
@@ -256,6 +319,10 @@ const SECRET_PATTERNS: Array<[RegExp, string]> = [
 function checkHygiene(dir: string, errors: string[]): void {
   for (const path of walk(dir)) {
     const rel = relative(dir, path);
+    if (lstatSync(path).isSymbolicLink()) {
+      errors.push(`${rel}: symlinks aren't allowed in a connector`);
+      continue;
+    }
     if (rel.endsWith(".har")) {
       errors.push(`${rel}: HAR files hold live cookies and tokens — never commit them`);
       continue;
@@ -272,7 +339,8 @@ function* walk(dir: string): Generator<string> {
   for (const name of readdirSync(dir)) {
     if (name === "node_modules" || name.startsWith(".")) continue;
     const path = join(dir, name);
-    if (statSync(path).isDirectory()) yield* walk(path);
+    // lstat: never follow a symlink (it could loop, or point outside); it's reported instead.
+    if (lstatSync(path).isDirectory()) yield* walk(path);
     else yield path;
   }
 }

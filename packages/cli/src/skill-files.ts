@@ -10,7 +10,7 @@
  */
 import { cpSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import { UsageError } from "./args.ts";
 import { VERSION } from "./version.ts";
@@ -34,6 +34,8 @@ export interface SkillProvenance {
 
 const SIDECAR = ".mastro.json";
 
+const SKILL_NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
 /**
  * Parse the `name:` and `description:` lines out of SKILL.md frontmatter.
  * Mastro skill frontmatter is deliberately flat single-line YAML, so a full
@@ -55,6 +57,11 @@ export function readSkill(dir: string, source: string): SkillInfo {
   if (!name || !description) {
     throw new UsageError(`${path} frontmatter must define single-line name and description`);
   }
+  // The name becomes a directory under the user's skills folder: a plain slug
+  // only, so a connector can't name a path (`../../..`) and write outside it.
+  if (!SKILL_NAME.test(name)) {
+    throw new UsageError(`${path}: skill name "${name}" must be lowercase letters, digits and dashes`);
+  }
   return { source, name, description, dir };
 }
 
@@ -66,7 +73,12 @@ export function providerSkills(providerId: string, providerDir: string): SkillIn
   for (const entry of readdirSync(root).sort()) {
     const dir = join(root, entry);
     if (statSync(dir).isDirectory() && existsSync(join(dir, "SKILL.md"))) {
-      out.push(readSkill(dir, `${providerId}/${entry}`));
+      const skill = readSkill(dir, `${providerId}/${entry}`);
+      // Namespaced, so a connector can't shadow the framework's skills or another connector's.
+      if (!skill.name.startsWith(`mastro-${providerId}-`)) {
+        throw new UsageError(`${providerId}/${entry}: skill name "${skill.name}" must start with "mastro-${providerId}-"`);
+      }
+      out.push(skill);
     }
   }
   return out;
@@ -88,7 +100,8 @@ export function installTarget(flags: Record<string, string | boolean | string[]>
 
 /** Copy a skill into `target/<skill.name>/` and stamp provenance. Returns the path. */
 export function installSkill(skill: SkillInfo, target: string): string {
-  const dest = join(target, skill.name);
+  const dest = resolve(target, skill.name);
+  if (dirname(dest) !== resolve(target)) throw new UsageError(`refusing to install skill "${skill.name}" outside ${target}`);
   cpSync(skill.dir, dest, { recursive: true });
   const provenance: SkillProvenance = {
     source: skill.source,

@@ -14,9 +14,9 @@ import type { Provider } from "@mastro/core";
 import { UsageError } from "../args.ts";
 import type { CliContext } from "../context.ts";
 import { pc, ui } from "../output.ts";
-import { DEFAULT_REF, DEFAULT_REPO, fetchProvider, listRemoteProviders } from "../provider-fetch.ts";
+import { DEFAULT_REF, DEFAULT_REPO, fetchProvider, listRemoteProviders, type RemoteProvider } from "../provider-fetch.ts";
 import { installSkill, installTarget, providerSkills } from "../skill-files.ts";
-import { extensionInstalled, installExtension } from "./extension.ts";
+import { extensionInstalled, extensionOutdated, installExtension } from "./extension.ts";
 import { rootSkill } from "./skills.ts";
 
 export async function setup(ctx: CliContext): Promise<number> {
@@ -35,16 +35,20 @@ export async function setup(ctx: CliContext): Promise<number> {
     }
 
     const needLogin = picked.filter(hasLoginCommands);
-    if (needLogin.length > 0 && !extensionInstalled()) {
+    if (needLogin.length > 0 && (!extensionInstalled() || extensionOutdated())) {
       const names = needLogin.map((p) => p.manifest.display_name).join(", ");
-      ui.print(`\nSome ${names} commands need a login, which uses the mastro browser extension.`);
+      ui.print(
+        extensionInstalled()
+          ? "\nYour mastro browser extension is out of date."
+          : `\nSome ${names} commands need a login, which uses the mastro browser extension.`,
+      );
       if (await confirm(rl, "Set up the extension now?")) await installExtension(false, true);
     }
 
-    ui.print("");
-    if (await confirm(rl, "Install their agent skills for Claude Code (~/.claude/skills)?")) {
+    const skills = [rootSkill(), ...picked.flatMap((p) => providerSkills(p.id, p.dir))];
+    ui.print(`\nAgent skills for these: ${skills.map((s) => s.name).join(", ")}`);
+    if (await confirm(rl, "Install them for Claude Code (~/.claude/skills)?")) {
       const target = installTarget({ global: true });
-      const skills = [rootSkill(), ...picked.flatMap((p) => providerSkills(p.id, p.dir))];
       for (const skill of skills) ui.success(`${skill.name} → ${installSkill(skill, target)}`);
     }
 
@@ -72,8 +76,15 @@ async function pickConnectors(ctx: CliContext, rl: Interface): Promise<Provider[
   });
   ui.print("");
 
-  const answer = (await ask(rl, "Install which? Numbers separated by spaces, or Enter for all: ")).trim();
-  const chosen = answer === "" || answer.toLowerCase() === "all" ? catalog : parseChoice(answer, catalog);
+  let chosen: RemoteProvider[] | undefined;
+  while (chosen === undefined) {
+    const answer = (await ask(rl, "Install which? Numbers separated by spaces, or Enter for all: ")).trim();
+    try {
+      chosen = answer === "" || answer.toLowerCase() === "all" ? catalog : parseChoice(answer, catalog);
+    } catch (err) {
+      ui.warn(err instanceof Error ? err.message : String(err)); // ask again
+    }
+  }
 
   const providers: Provider[] = [];
   for (const c of chosen) {

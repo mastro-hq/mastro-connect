@@ -33,7 +33,7 @@
     "packages/*"
   ],
   "engines": {
-    "bun": ">=1.1.0"
+    "bun": ">=1.2.21"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p extension/tsconfig.json",
@@ -42,6 +42,16 @@
     "build": "bun build packages/cli/src/bin.ts --target=bun --outdir dist",
     "prepack": "bun run build",
     "mastro": "bun run packages/cli/src/bin.ts"
+  },
+  "optionalDependencies": {
+    "@oven/bun-darwin-aarch64": "1.4.3",
+    "@oven/bun-darwin-x64": "1.4.3",
+    "@oven/bun-linux-aarch64": "1.4.3",
+    "@oven/bun-linux-aarch64-musl": "1.4.3",
+    "@oven/bun-linux-x64": "1.4.3",
+    "@oven/bun-linux-x64-musl": "1.4.3",
+    "@oven/bun-windows-aarch64": "1.4.3",
+    "@oven/bun-windows-x64": "1.4.3"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
