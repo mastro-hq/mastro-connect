@@ -17,11 +17,10 @@
   }
 
   function announcePresence() {
-    // Inject a tiny page-context flag the bootstrap page checks.
-    const s = document.createElement("script");
-    s.textContent = "window.__mastroExtensionPresent = true;";
-    (document.head || document.documentElement).appendChild(s);
-    s.remove();
+    // Mark the shared DOM — the bootstrap page checks this attribute. (An
+    // injected inline <script> would be blocked: MV3 applies the extension's
+    // CSP to scripts a content script inserts.)
+    document.documentElement.dataset.mastroExtension = "present";
   }
 
   function start() {

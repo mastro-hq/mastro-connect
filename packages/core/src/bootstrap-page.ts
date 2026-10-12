@@ -59,9 +59,9 @@ export function renderBootstrapPage(session: SessionPayload): string {
 
   <script type="application/json" id="mastro-session">${payloadJson}</script>
   <script>
-    // If the extension is present, content-localhost.js sets this flag.
+    // If the extension is present, content-localhost.js marks <html data-mastro-extension>.
     setTimeout(function () {
-      if (!window.__mastroExtensionPresent) {
+      if (document.documentElement.dataset.mastroExtension !== 'present') {
         document.getElementById('install').hidden = false;
         document.getElementById('status').textContent = 'mastro extension not found';
         document.getElementById('dot').className = 'dot err';
